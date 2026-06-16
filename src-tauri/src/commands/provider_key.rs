@@ -8,3 +8,15 @@ use crate::error::Result;
 pub async fn resolve_api_key(provider_id: &str) -> Result<Option<String>> {
     keychain::try_retrieve(provider_id).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_api_key_function_exists() {
+        // This test just verifies the function signature is correct
+        // Actual integration tests would require a keychain backend
+        let _ = resolve_api_key;
+    }
+}

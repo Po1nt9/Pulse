@@ -48,3 +48,16 @@ coverage/
 
 # 本地数据（开发时）
 *.local
+
+# Cargo
+.cargo/
+
+# 编辑器临时文件
+*.swp
+*.swo
+
+# 测试覆盖率输出
+.nyc_output/
+
+# TypeScript 构建信息
+*.tsbuildinfo

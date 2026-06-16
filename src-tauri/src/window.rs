@@ -35,7 +35,7 @@ pub fn hide_window(app: &AppHandle) {
     }
 }
 
-pub fn toggle_window(app: &AppHandle) {
+pub async fn toggle_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         match window.is_visible() {
             Ok(true) => { let _ = window.hide(); }
@@ -45,7 +45,7 @@ pub fn toggle_window(app: &AppHandle) {
 
                 if let Some(state) = app.try_state::<AppState>() {
                     let stored = {
-                        let cfg = state.config.blocking_read();
+                        let cfg = state.config.read().await;
                         cfg.settings.window_position
                     };
                     match stored {

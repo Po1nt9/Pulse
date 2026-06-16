@@ -1,0 +1,21 @@
+# 默认代码所有者
+* @pulse-team/core
+
+# 前端代码
+/src/**/*.tsx @pulse-team/frontend
+/src/**/*.ts @pulse-team/frontend
+
+# Rust 后端
+/src-tauri/**/*.rs @pulse-team/backend
+
+# 配置文件
+/package.json @pulse-team/core
+/Cargo.toml @pulse-team/core
+/*.config.js @pulse-team/frontend
+
+# 文档
+/docs/**/*.md @pulse-team/docs
+/*.md @pulse-team/core
+
+# CI/CD
+/.github/workflows/** @pulse-team/devops

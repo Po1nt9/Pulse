@@ -1,46 +1,52 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useToastStore } from '../store/toastStore';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
 const TOAST_LIFETIME_MS = 4000;
 const SWEEP_INTERVAL_MS = 500;
-const toastAddedAt = new Map<string, number>();
 
 export function NotificationToast() {
   const toasts = useToastStore((state) => state.toasts);
   const removeToast = useToastStore((state) => state.removeToast);
+  const toastAddedAt = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
-    const now = Date.now();
-    toasts.forEach((t) => {
-      if (!toastAddedAt.has(t.id)) toastAddedAt.set(t.id, now);
-    });
-    const expired = toasts
-      .filter((t) => now - (toastAddedAt.get(t.id) ?? now) >= TOAST_LIFETIME_MS)
-      .map((t) => t.id);
-    expired.forEach((id) => {
-      toastAddedAt.delete(id);
-      removeToast(id);
-    });
-  }, [toasts, removeToast]);
-
-  useEffect(() => {
+    const addedAtMap = toastAddedAt.current;
+    
     const timer = setInterval(() => {
       const now = Date.now();
-      const current = useToastStore.getState().toasts;
-      current.forEach((t) => {
-        if (!toastAddedAt.has(t.id)) toastAddedAt.set(t.id, now);
+      const currentToasts = useToastStore.getState().toasts;
+
+      // 记录新 toast 的添加时间
+      currentToasts.forEach((t) => {
+        if (!addedAtMap.has(t.id)) {
+          addedAtMap.set(t.id, now);
+        }
       });
-      const expired = current
-        .filter((t) => now - (toastAddedAt.get(t.id) ?? now) >= TOAST_LIFETIME_MS)
+
+      // 清理过期的 toast
+      const expired = currentToasts
+        .filter((t) => now - (addedAtMap.get(t.id) ?? now) >= TOAST_LIFETIME_MS)
         .map((t) => t.id);
+
       expired.forEach((id) => {
-        toastAddedAt.delete(id);
+        addedAtMap.delete(id);
         useToastStore.getState().removeToast(id);
       });
     }, SWEEP_INTERVAL_MS);
-    return () => clearInterval(timer);
-  }, []);
+
+    return () => {
+      clearInterval(timer);
+      // 清理已移除的 toast 的时间记录
+      const currentToasts = useToastStore.getState().toasts;
+      const currentIds = new Set(currentToasts.map((t) => t.id));
+      addedAtMap.forEach((_, id) => {
+        if (!currentIds.has(id)) {
+          addedAtMap.delete(id);
+        }
+      });
+    };
+  }, [removeToast]);
 
   if (toasts.length === 0) return null;
 

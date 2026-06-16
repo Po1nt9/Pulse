@@ -1,0 +1,57 @@
+name: 功能请求
+description: 为 Pulse 项目提出新功能或改进建议
+title: "[Feature]: "
+labels: ["Feature", "待确认"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢您提出改进建议！请填写以下信息帮助我们理解您的需求。
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 需求背景
+      description: 描述这个需求的背景和动机
+      placeholder: 我在使用 Pulse 时经常遇到...
+    validations:
+      required: true
+
+  - type: textarea
+    id: target-users
+    attributes:
+      label: 目标用户
+      description: 描述这个功能的目标用户群体
+      placeholder: 这个功能主要面向哪些用户？
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-solution
+    attributes:
+      label: 期望方案
+      description: 清晰简洁地描述你期望的解决方案
+      placeholder: 我希望能够...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案
+      description: 描述你考虑过的其他替代方案
+      placeholder: 我还考虑过...
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 验收标准
+      description: 列出这个功能完成的标准
+      value: |
+        - [ ] 标准 1
+        - [ ] 标准 2
+        - [ ] 标准 3
+    validations:
+      required: false

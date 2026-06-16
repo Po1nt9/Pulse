@@ -33,8 +33,10 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), tauri::Error> {
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
-                let app = tray.app_handle();
-                crate::window::toggle_window(app);
+                let app_handle = tray.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    crate::window::toggle_window(&app_handle).await;
+                });
             }
         })
         .build(app)?;

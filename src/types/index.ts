@@ -23,10 +23,12 @@ export interface UsageData {
   period: string;
 }
 
+export type ProviderType = 'deepseek' | 'openai' | 'anthropic' | 'openrouter' | 'custom';
+
 export interface ProviderConfig {
   id: string;
   name: string;
-  provider_type: 'deepseek' | 'openai' | 'anthropic' | 'openrouter' | 'custom';
+  provider_type: ProviderType;
   api_base_url: string;
   display_name: string;
   refresh_interval_seconds: number;
