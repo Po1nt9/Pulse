@@ -1,6 +1,6 @@
 import { useUIStore } from '../store/uiStore';
 import { useSettings, useUpdateSettings } from '../hooks/useSettings';
-import { useProviders } from '../hooks/useProviders';
+import { useProviders, useToggleProvider } from '../hooks/useProviders';
 import { GlassPanel } from './GlassPanel';
 import { ArrowLeft } from 'lucide-react';
 
@@ -9,6 +9,7 @@ export function SettingsPanel() {
   const { data: settings } = useSettings();
   const { data: providers } = useProviders();
   const updateSettings = useUpdateSettings();
+  const toggleProvider = useToggleProvider();
 
   const handleToggleNotifications = () => {
     if (settings) {
@@ -17,18 +18,7 @@ export function SettingsPanel() {
   };
 
   const handleToggleProvider = (providerId: string, enabled: boolean) => {
-    if (settings) {
-      updateSettings.mutate({
-        ...settings,
-        provider_overrides: {
-          ...settings.provider_overrides,
-          [providerId]: {
-            ...settings.provider_overrides[providerId],
-            enabled,
-          },
-        },
-      });
-    }
+    toggleProvider.mutate({ id: providerId, enabled });
   };
 
   return (
@@ -57,7 +47,8 @@ export function SettingsPanel() {
                   settings?.show_notifications ? 'bg-accent' : 'bg-white/10'
                 }`}
                 role="switch"
-                aria-checked={settings?.show_notifications}
+                aria-checked={!!settings?.show_notifications}
+                aria-label="显示通知"
               >
                 <div
                   className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${

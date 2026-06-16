@@ -1,31 +1,36 @@
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useProviders } from '../hooks/useProviders';
-import { useBalance, useRefreshAllBalances } from '../hooks/useBalance';
+import { useRefreshAllBalances } from '../hooks/useBalance';
 import { useUIStore } from '../store/uiStore';
-import { ProviderBalance } from '../types';
+import { ProviderBalance, ProviderConfig } from '../types';
 import { ProviderCard } from './ProviderCard';
 import { GlassPanel } from './GlassPanel';
 import { RefreshCw, Settings, Plus } from 'lucide-react';
 
-/**
- * Single provider row that fetches its own balance from the React Query cache
- * (populated by refresh_all_balances on mount).
- */
-function ProviderRow({ providerId, providerName, onClick }: {
-  providerId: string;
-  providerName: string;
+function ProviderRow({
+  provider,
+  onClick,
+}: {
+  provider: ProviderConfig;
   onClick: () => void;
 }) {
-  const { data: balance } = useBalance(providerId);
+  // 订阅 balance 缓存但不主动 fetch；refresh_all_balances 的 setQueryData 会触发重渲染。
+  const { data: balance } = useQuery<ProviderBalance | undefined>({
+    queryKey: ['balance', provider.id],
+    queryFn: () => undefined,
+    enabled: false,
+    staleTime: Infinity,
+  });
 
-  const providerBalance: ProviderBalance = balance ?? {
-    provider_id: providerId,
-    provider_name: providerName,
-    balance: null,
-    error: null,
-    last_updated: null,
-  };
-
+  const providerBalance: ProviderBalance =
+    balance ?? {
+      provider_id: provider.id,
+      provider_name: provider.display_name || provider.name,
+      balance: null,
+      error: null,
+      last_updated: null,
+    };
   return <ProviderCard provider={providerBalance} onClick={onClick} />;
 }
 
@@ -36,12 +41,10 @@ export function OverviewPanel() {
   const openSettings = useUIStore((s) => s.openSettings);
   const openAddProviderModal = useUIStore((s) => s.openAddProviderModal);
 
-  // Load all balances on mount
   useEffect(() => {
     if (providers && providers.length > 0) {
       refreshMutation.mutate();
     }
-    // Only on mount or when providers list changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providers?.length]);
 
@@ -51,7 +54,6 @@ export function OverviewPanel() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between p-4">
         <div>
           <h1 className="text-lg font-semibold text-white/90">Pulse</h1>
@@ -70,7 +72,6 @@ export function OverviewPanel() {
         </div>
       </div>
 
-      {/* Provider List */}
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         <GlassPanel padding="sm">
           {isLoading && (
@@ -80,8 +81,7 @@ export function OverviewPanel() {
           {providers?.map((provider) => (
             <ProviderRow
               key={provider.id}
-              providerId={provider.id}
-              providerName={provider.display_name || provider.name}
+              provider={provider}
               onClick={() => navigateToDetail(provider.id)}
             />
           ))}

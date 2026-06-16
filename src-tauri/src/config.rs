@@ -15,11 +15,17 @@ pub struct ProviderConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 pub enum ProviderType {
+    // Aliases keep deserialization backward-compatible with the previous
+    // `snake_case` serialization (e.g. "deep_seek", "open_ai", "open_router")
+    // so existing config.json files still load after the rename to `lowercase`.
+    #[serde(alias = "deep_seek")]
     DeepSeek,
+    #[serde(alias = "open_ai")]
     OpenAi,
     Anthropic,
+    #[serde(alias = "open_router")]
     OpenRouter,
     Custom,
 }
@@ -216,9 +222,26 @@ mod tests {
     }
 
     #[test]
-    fn provider_type_snake_case_serialization() {
+    fn provider_type_lowercase_serialization() {
         let pt = ProviderType::OpenAi;
         let json = serde_json::to_string(&pt).unwrap();
-        assert_eq!(json, "\"open_ai\"");
+        assert_eq!(json, "\"openai\"");
+    }
+
+    #[test]
+    fn provider_type_legacy_snake_case_deserializes() {
+        // Old config.json files used snake_case; they must still load.
+        assert!(matches!(
+            serde_json::from_str::<ProviderType>("\"deep_seek\"").unwrap(),
+            ProviderType::DeepSeek
+        ));
+        assert!(matches!(
+            serde_json::from_str::<ProviderType>("\"open_ai\"").unwrap(),
+            ProviderType::OpenAi
+        ));
+        assert!(matches!(
+            serde_json::from_str::<ProviderType>("\"open_router\"").unwrap(),
+            ProviderType::OpenRouter
+        ));
     }
 }

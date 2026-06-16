@@ -16,12 +16,20 @@ export function useTray() {
   }, [refreshMutation]);
 
   useEffect(() => {
-    const unlisten = listen('refresh-requested', () => {
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
+    listen('refresh-requested', () => {
       refreshMutationRef.current.mutate();
-    });
+    })
+      .then((f) => {
+        if (cancelled) f();
+        else cleanup = f;
+      })
+      .catch((e) => console.error('useTray: failed to subscribe refresh-requested', e));
 
     return () => {
-      unlisten.then((f) => f());
+      cancelled = true;
+      cleanup?.();
     };
   }, []);
 

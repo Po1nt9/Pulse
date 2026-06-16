@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::AppState;
 use crate::providers::{create_balance_provider, BalanceInfo};
-use crate::commands::keychain;
+use crate::commands::provider_key;
 use crate::error::Result;
 
 #[derive(Serialize)]
@@ -26,34 +26,33 @@ pub async fn get_balance(state: State<'_, AppState>, provider_id: String) -> Res
             .ok_or_else(|| crate::error::AppError::ProviderNotFound(provider_id.clone()))?
     };
 
-    let api_key = keychain::retrieve(&provider_id).await.ok();
-
-    if let Some(key) = api_key {
-        let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
-        match adapter.get_balance(&key, &state.http_client).await {
-            Ok(balance) => Ok(ProviderBalance {
-                provider_id: provider.id.clone(),
-                provider_name: provider.name.clone(),
-                balance: Some(balance),
-                error: None,
-                last_updated: Some(chrono::Local::now().to_rfc3339()),
-            }),
-            Err(e) => Ok(ProviderBalance {
-                provider_id: provider.id.clone(),
-                provider_name: provider.name.clone(),
-                balance: None,
-                error: Some(e.to_string()),
-                last_updated: None,
-            }),
+    match provider_key::resolve_api_key(&provider_id).await? {
+        Some(key) => {
+            let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
+            match adapter.get_balance(&key, &state.http_client).await {
+                Ok(balance) => Ok(ProviderBalance {
+                    provider_id: provider.id.clone(),
+                    provider_name: provider.name.clone(),
+                    balance: Some(balance),
+                    error: None,
+                    last_updated: Some(chrono::Local::now().to_rfc3339()),
+                }),
+                Err(e) => Ok(ProviderBalance {
+                    provider_id: provider.id.clone(),
+                    provider_name: provider.name.clone(),
+                    balance: None,
+                    error: Some(e.to_string()),
+                    last_updated: None,
+                }),
+            }
         }
-    } else {
-        Ok(ProviderBalance {
+        None => Ok(ProviderBalance {
             provider_id: provider.id.clone(),
             provider_name: provider.name.clone(),
             balance: None,
             error: Some("API key not configured".to_string()),
             last_updated: None,
-        })
+        }),
     }
 }
 
@@ -71,34 +70,41 @@ pub async fn refresh_all_balances(state: State<'_, AppState>) -> Result<Vec<Prov
         if !provider.enabled {
             continue;
         }
-        let api_key = keychain::retrieve(&provider.id).await.ok();
-
-        let result = if let Some(key) = api_key {
-            let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
-            match adapter.get_balance(&key, &state.http_client).await {
-                Ok(balance) => ProviderBalance {
-                    provider_id: provider.id.clone(),
-                    provider_name: provider.name.clone(),
-                    balance: Some(balance),
-                    error: None,
-                    last_updated: Some(chrono::Local::now().to_rfc3339()),
-                },
-                Err(e) => ProviderBalance {
-                    provider_id: provider.id.clone(),
-                    provider_name: provider.name.clone(),
-                    balance: None,
-                    error: Some(e.to_string()),
-                    last_updated: None,
-                },
+        let result = match provider_key::resolve_api_key(&provider.id).await {
+            Ok(Some(key)) => {
+                let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
+                match adapter.get_balance(&key, &state.http_client).await {
+                    Ok(balance) => ProviderBalance {
+                        provider_id: provider.id.clone(),
+                        provider_name: provider.name.clone(),
+                        balance: Some(balance),
+                        error: None,
+                        last_updated: Some(chrono::Local::now().to_rfc3339()),
+                    },
+                    Err(e) => ProviderBalance {
+                        provider_id: provider.id.clone(),
+                        provider_name: provider.name.clone(),
+                        balance: None,
+                        error: Some(e.to_string()),
+                        last_updated: None,
+                    },
+                }
             }
-        } else {
-            ProviderBalance {
+            Ok(None) => ProviderBalance {
                 provider_id: provider.id.clone(),
                 provider_name: provider.name.clone(),
                 balance: None,
                 error: Some("API key not configured".to_string()),
                 last_updated: None,
-            }
+            },
+            // Keychain failures for one provider must not abort the whole batch.
+            Err(e) => ProviderBalance {
+                provider_id: provider.id.clone(),
+                provider_name: provider.name.clone(),
+                balance: None,
+                error: Some(e.to_string()),
+                last_updated: None,
+            },
         };
         results.push(result);
     }

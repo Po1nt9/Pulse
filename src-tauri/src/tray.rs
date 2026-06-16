@@ -11,8 +11,13 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), tauri::Error> {
         &MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?,
     ])?;
 
+    let icon = match app.default_window_icon() {
+        Some(icon) => icon.clone(),
+        None => return Err(tauri::Error::AssetNotFound("default window icon".into())),
+    };
+
     TrayIconBuilder::new()
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(icon)
         .menu(&menu)
         .on_menu_event(|app, event| {
             match event.id().as_ref() {

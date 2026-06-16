@@ -40,6 +40,18 @@ pub async fn has(provider_id: &str) -> Result<bool> {
     }
 }
 
+/// Retrieve the API key, returning `Ok(None)` when the key is genuinely missing
+/// (NoEntry) and `Err` only when the keychain itself fails. Avoids the double
+/// query + TOCTOU race of calling `has` then `retrieve`.
+pub async fn try_retrieve(provider_id: &str) -> Result<Option<String>> {
+    let entry = entry_for(provider_id)?;
+    match entry.get_password() {
+        Ok(p) => Ok(Some(p)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(AppError::Keychain(e.to_string())),
+    }
+}
+
 // ── Tauri command wrappers ───────────────────────────────────────────
 
 #[tauri::command]

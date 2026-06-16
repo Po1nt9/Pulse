@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProviderBalance } from '../types';
 import { tauriInvoke } from '../utils/tauri';
 
-const BALANCE_KEY = 'balance';
+export const BALANCE_KEY = 'balance';
 
 export function useBalance(providerId: string) {
   return useQuery({
@@ -21,7 +21,6 @@ export function useRefreshAllBalances() {
       data.forEach((balance) => {
         queryClient.setQueryData([BALANCE_KEY, balance.provider_id], balance);
       });
-      queryClient.invalidateQueries({ queryKey: [BALANCE_KEY] });
     },
   });
 }
