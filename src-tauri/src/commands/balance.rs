@@ -70,8 +70,8 @@ pub async fn refresh_all_balances(state: State<'_, AppState>) -> Result<Vec<Prov
         if !provider.enabled {
             continue;
         }
-        let result = match provider_key::resolve_api_key(&provider.id).await? {
-            Some(key) => {
+        let result = match provider_key::resolve_api_key(&provider.id).await {
+            Ok(Some(key)) => {
                 let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
                 match adapter.get_balance(&key, &state.http_client).await {
                     Ok(balance) => ProviderBalance {
@@ -90,11 +90,19 @@ pub async fn refresh_all_balances(state: State<'_, AppState>) -> Result<Vec<Prov
                     },
                 }
             }
-            None => ProviderBalance {
+            Ok(None) => ProviderBalance {
                 provider_id: provider.id.clone(),
                 provider_name: provider.name.clone(),
                 balance: None,
                 error: Some("API key not configured".to_string()),
+                last_updated: None,
+            },
+            // Keychain failures for one provider must not abort the whole batch.
+            Err(e) => ProviderBalance {
+                provider_id: provider.id.clone(),
+                provider_name: provider.name.clone(),
+                balance: None,
+                error: Some(e.to_string()),
                 last_updated: None,
             },
         };

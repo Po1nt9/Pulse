@@ -47,7 +47,8 @@ export function SettingsPanel() {
                   settings?.show_notifications ? 'bg-accent' : 'bg-white/10'
                 }`}
                 role="switch"
-                aria-checked={settings?.show_notifications}
+                aria-checked={!!settings?.show_notifications}
+                aria-label="显示通知"
               >
                 <div
                   className={`w-4 h-4 rounded-full bg-white absolute top-0.5 transition-transform ${

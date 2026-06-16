@@ -43,8 +43,9 @@ export function ProviderSettings({ provider, onUpdate }: ProviderSettingsProps) 
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs text-white/50 block mb-1">显示名称</label>
+        <label htmlFor="provider-display-name" className="text-xs text-white/50 block mb-1">显示名称</label>
         <input
+          id="provider-display-name"
           type="text"
           className="glass-input"
           value={form.display_name}
@@ -53,8 +54,9 @@ export function ProviderSettings({ provider, onUpdate }: ProviderSettingsProps) 
         />
       </div>
       <div>
-        <label className="text-xs text-white/50 block mb-1">API Base URL</label>
+        <label htmlFor="provider-api-base-url" className="text-xs text-white/50 block mb-1">API Base URL</label>
         <input
+          id="provider-api-base-url"
           type="text"
           className="glass-input"
           value={form.api_base_url}
@@ -63,24 +65,32 @@ export function ProviderSettings({ provider, onUpdate }: ProviderSettingsProps) 
         />
       </div>
       <div>
-        <label className="text-xs text-white/50 block mb-1">警告阈值 (%)</label>
+        <label htmlFor="provider-warning-threshold" className="text-xs text-white/50 block mb-1">警告阈值 (%)</label>
         <input
+          id="provider-warning-threshold"
           type="number"
           className="glass-input"
           value={form.warning_threshold_percent}
-          onChange={(e) => setForm((f) => ({ ...f, warning_threshold_percent: parseFloat(e.target.value) }))}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            setForm((f) => ({ ...f, warning_threshold_percent: Number.isNaN(v) ? 0 : v }));
+          }}
           onBlur={() => commit(form)}
           min={0}
           max={100}
         />
       </div>
       <div>
-        <label className="text-xs text-white/50 block mb-1">刷新间隔 (秒)</label>
+        <label htmlFor="provider-refresh-interval" className="text-xs text-white/50 block mb-1">刷新间隔 (秒)</label>
         <input
+          id="provider-refresh-interval"
           type="number"
           className="glass-input"
           value={form.refresh_interval_seconds}
-          onChange={(e) => setForm((f) => ({ ...f, refresh_interval_seconds: parseInt(e.target.value) }))}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            setForm((f) => ({ ...f, refresh_interval_seconds: Number.isNaN(v) ? 0 : v }));
+          }}
           onBlur={() => commit(form)}
           min={60}
         />

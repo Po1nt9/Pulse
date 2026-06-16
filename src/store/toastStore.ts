@@ -10,7 +10,7 @@ interface ToastState {
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   addToast: (message, type) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
     set((state) => ({ toasts: [...state.toasts, { id, message, type }] }));
     return id;
   },

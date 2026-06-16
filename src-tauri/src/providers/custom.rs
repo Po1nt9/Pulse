@@ -4,7 +4,7 @@ use serde::Deserialize;
 use crate::providers::{BalanceInfo, BalanceProvider, UsageData, UsageProvider};
 use crate::http::{auth_headers, handle_response_status};
 
-/// 去掉 base URL 末尾的 `/`，最多 trim 多个连续斜杠。
+/// 去掉 base URL 末尾的所有连续 `/`。
 pub fn normalize_base_url(url: &str) -> String {
     url.trim_end_matches('/').to_string()
 }

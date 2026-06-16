@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProviderConfig } from '../types';
 import { tauriInvoke } from '../utils/tauri';
+import { BALANCE_KEY } from './useBalance';
+import { useToastStore } from '../store/toastStore';
 
 const PROVIDERS_KEY = 'providers';
 
@@ -25,6 +27,7 @@ export function useUpdateProvider() {
     mutationFn: ({ id, provider }: { id: string; provider: ProviderConfig }) =>
       tauriInvoke<ProviderConfig>('update_provider', { provider_id: id, updates: provider }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [PROVIDERS_KEY] }),
+    onError: (e) => useToastStore.getState().addToast(`更新供应商失败：${e}`, 'error'),
   });
 }
 
@@ -43,7 +46,7 @@ export function useToggleProvider() {
       tauriInvoke<void>('toggle_provider', { provider_id: id, enabled }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [PROVIDERS_KEY] });
-      queryClient.invalidateQueries({ queryKey: ['balance'] });
+      queryClient.invalidateQueries({ queryKey: [BALANCE_KEY] });
     },
   });
 }
