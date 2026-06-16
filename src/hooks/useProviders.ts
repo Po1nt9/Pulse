@@ -35,3 +35,15 @@ export function useDeleteProvider() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [PROVIDERS_KEY] }),
   });
 }
+
+export function useToggleProvider() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      tauriInvoke<void>('toggle_provider', { provider_id: id, enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [PROVIDERS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['balance'] });
+    },
+  });
+}

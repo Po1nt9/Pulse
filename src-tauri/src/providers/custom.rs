@@ -4,6 +4,11 @@ use serde::Deserialize;
 use crate::providers::{BalanceInfo, BalanceProvider, UsageData, UsageProvider};
 use crate::http::{auth_headers, handle_response_status};
 
+/// 去掉 base URL 末尾的 `/`，最多 trim 多个连续斜杠。
+pub fn normalize_base_url(url: &str) -> String {
+    url.trim_end_matches('/').to_string()
+}
+
 pub struct CustomProvider {
     api_base_url: String,
 }
@@ -39,7 +44,7 @@ impl BalanceProvider for CustomProvider {
         api_key: &str,
         client: &reqwest::Client,
     ) -> crate::error::Result<BalanceInfo> {
-        let url = format!("{}/user/balance", self.api_base_url.trim_end_matches('/'));
+        let url = format!("{}/user/balance", normalize_base_url(&self.api_base_url));
         let response = client
             .get(&url)
             .headers(auth_headers(api_key)?)
@@ -153,5 +158,33 @@ mod tests {
     fn provider_default_url() {
         let provider = CustomProvider::new();
         assert_eq!(BalanceProvider::provider_name(&provider), "Custom");
+    }
+
+    #[test]
+    fn normalize_no_trailing_slash() {
+        assert_eq!(normalize_base_url("https://x.com"), "https://x.com");
+    }
+
+    #[test]
+    fn normalize_single_trailing_slash() {
+        assert_eq!(normalize_base_url("https://x.com/"), "https://x.com");
+    }
+
+    #[test]
+    fn normalize_multiple_trailing_slashes() {
+        assert_eq!(normalize_base_url("https://x.com///"), "https://x.com");
+    }
+
+    #[test]
+    fn normalize_empty() {
+        assert_eq!(normalize_base_url(""), "");
+    }
+
+    #[test]
+    fn normalize_internal_slash_preserved() {
+        assert_eq!(
+            normalize_base_url("https://api.example.com/v1/"),
+            "https://api.example.com/v1"
+        );
     }
 }

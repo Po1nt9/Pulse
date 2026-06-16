@@ -29,7 +29,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://localhost:1420 https://api.deepseek.com https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.openrouter.ai; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:;"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: https://api.deepseek.com https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.openrouter.ai; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:;",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://localhost:1420 https://api.deepseek.com https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.openrouter.ai; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:;"
     }
   },
   "bundle": {

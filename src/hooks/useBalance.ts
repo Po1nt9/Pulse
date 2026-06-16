@@ -21,7 +21,6 @@ export function useRefreshAllBalances() {
       data.forEach((balance) => {
         queryClient.setQueryData([BALANCE_KEY, balance.provider_id], balance);
       });
-      queryClient.invalidateQueries({ queryKey: [BALANCE_KEY] });
     },
   });
 }

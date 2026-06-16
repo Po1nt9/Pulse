@@ -28,15 +28,11 @@ impl AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app_state = AppState::new().expect("Failed to initialize app state");
-    
     tauri::Builder::default()
-        .manage(app_state)
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            let _ = app.get_webview_window("main")
-                .expect("No main window")
-                .show()
-                .expect("Failed to show window");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+            }
         }))
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
@@ -57,14 +53,16 @@ pub fn run() {
         ])
         .setup(|app| {
             let app_handle = app.handle().clone();
-            // Setup tray icon
+            let app_state = AppState::new()
+                .map_err(|e| Box::<dyn std::error::Error>::from(format!("init app state: {e}")))?;
+            app.manage(app_state);
+
             tray::setup_tray(&app_handle)?;
-            
-            // Hide window on startup (tray-only mode)
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
             }
-            
+
             Ok(())
         })
         .run(tauri::generate_context!())

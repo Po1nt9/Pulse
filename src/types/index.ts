@@ -55,7 +55,6 @@ export interface AppSettings {
   global_refresh_interval: number;
   show_notifications: boolean;
   window_position: [number, number] | null;
-  provider_overrides: Record<string, { enabled: boolean }>;
 }
 
 export type TimeRange = 'recent' | 'today' | 'week' | 'month';

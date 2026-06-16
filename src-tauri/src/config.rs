@@ -15,7 +15,7 @@ pub struct ProviderConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 pub enum ProviderType {
     DeepSeek,
     OpenAi,
@@ -216,9 +216,9 @@ mod tests {
     }
 
     #[test]
-    fn provider_type_snake_case_serialization() {
+    fn provider_type_lowercase_serialization() {
         let pt = ProviderType::OpenAi;
         let json = serde_json::to_string(&pt).unwrap();
-        assert_eq!(json, "\"open_ai\"");
+        assert_eq!(json, "\"openai\"");
     }
 }

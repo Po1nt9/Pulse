@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUIStore } from '../store/uiStore';
 import { useBalance } from '../hooks/useBalance';
 import { useUsage } from '../hooks/useUsage';
+import { useProviders, useUpdateProvider } from '../hooks/useProviders';
 import { BalanceDisplay } from './BalanceDisplay';
 import { UsageChart } from './UsageChart';
 import { MetricToggle } from './MetricToggle';
 import { ProgressBar } from './ProgressBar';
 import { GlassPanel } from './GlassPanel';
-import { ArrowLeft, Settings } from 'lucide-react';
+import { ProviderSettings } from './ProviderSettings';
+import { ArrowLeft, Settings, Edit3 } from 'lucide-react';
 
 export function DetailPanel() {
   const selectedProviderId = useUIStore((state) => state.selectedProviderId);
@@ -15,6 +17,11 @@ export function DetailPanel() {
   const setTimeRange = useUIStore((state) => state.setTimeRange);
   const navigateToOverview = useUIStore((state) => state.navigateToOverview);
   const openSettings = useUIStore((state) => state.openSettings);
+
+  const { data: providers } = useProviders();
+  const updateProvider = useUpdateProvider();
+  const [isEditing, setIsEditing] = useState(false);
+  const selectedProvider = providers?.find((p) => p.id === selectedProviderId) ?? null;
 
   const { data: balance, isLoading: balanceLoading } = useBalance(selectedProviderId || '');
   const { data: usage } = useUsage(selectedProviderId || '', selectedTimeRange);
@@ -39,9 +46,18 @@ export function DetailPanel() {
             {balance?.provider_name || '供应商详情'}
           </h2>
         </div>
-        <button onClick={openSettings} className="glass-button p-2" aria-label="设置">
-          <Settings className="w-4 h-4" />
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setIsEditing((v) => !v)}
+            className="glass-button p-2"
+            aria-label={isEditing ? '关闭编辑' : '编辑设置'}
+          >
+            <Edit3 className="w-4 h-4" />
+          </button>
+          <button onClick={openSettings} className="glass-button p-2" aria-label="设置">
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -72,6 +88,17 @@ export function DetailPanel() {
         {balance?.error && (
           <GlassPanel className="border-status-danger/30">
             <p className="text-sm text-status-danger">{balance.error}</p>
+          </GlassPanel>
+        )}
+
+        {/* Edit Settings */}
+        {isEditing && selectedProvider && (
+          <GlassPanel>
+            <h3 className="text-sm font-medium text-white/70 mb-4">编辑设置</h3>
+            <ProviderSettings
+              provider={selectedProvider}
+              onUpdate={(p) => updateProvider.mutate({ id: p.id, provider: p })}
+            />
           </GlassPanel>
         )}
       </div>
