@@ -1,0 +1,21 @@
+# 默认代码所有者
+* @Po1nt9
+
+# 前端代码
+/src/**/*.tsx @Po1nt9
+/src/**/*.ts @Po1nt9
+
+# Rust 后端
+/src-tauri/**/*.rs @Po1nt9
+
+# 配置文件
+/package.json @Po1nt9
+/src-tauri/Cargo.toml @Po1nt9
+/*.config.js @Po1nt9
+
+# 文档
+/docs/**/*.md @Po1nt9
+/*.md @Po1nt9
+
+# CI/CD
+/.github/workflows/** @Po1nt9

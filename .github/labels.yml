@@ -1,0 +1,50 @@
+# 类型标签
+- name: "Bug"
+  color: "d73a4a"
+  description: "Something isn't working"
+
+- name: "Feature"
+  color: "a2eeef"
+  description: "New feature or request"
+
+- name: "Documentation"
+  color: "0075ca"
+  description: "Improvements or additions to documentation"
+
+- name: "Enhancement"
+  color: "c2e0c6"
+  description: "Improvement to existing feature"
+
+- name: "Question"
+  color: "d876e3"
+  description: "Further information is requested"
+
+# 状态标签
+- name: "待确认"
+  color: "fbca04"
+  description: "Issue needs to be confirmed"
+
+- name: "进行中"
+  color: "0e8a16"
+  description: "Work in progress"
+
+- name: "已完成"
+  color: "0e8a16"
+  description: "Issue has been resolved"
+
+- name: "需要更多信息"
+  color: "b60205"
+  description: "Needs more information from reporter"
+
+# 优先级标签
+- name: "优先级：高"
+  color: "b60205"
+  description: "High priority"
+
+- name: "优先级：中"
+  color: "fbca04"
+  description: "Medium priority"
+
+- name: "优先级：低"
+  color: "0e8a16"
+  description: "Low priority"

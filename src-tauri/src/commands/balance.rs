@@ -64,50 +64,66 @@ pub async fn refresh_all_balances(state: State<'_, AppState>) -> Result<Vec<Prov
         config.providers.clone()
     };
 
-    let mut results = Vec::new();
+    // Filter enabled providers
+    let enabled_providers: Vec<_> = providers.into_iter()
+        .filter(|p| p.enabled)
+        .collect();
 
-    for provider in providers {
-        if !provider.enabled {
-            continue;
-        }
-        let result = match provider_key::resolve_api_key(&provider.id).await {
-            Ok(Some(key)) => {
-                let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
-                match adapter.get_balance(&key, &state.http_client).await {
-                    Ok(balance) => ProviderBalance {
-                        provider_id: provider.id.clone(),
-                        provider_name: provider.name.clone(),
-                        balance: Some(balance),
-                        error: None,
-                        last_updated: Some(chrono::Local::now().to_rfc3339()),
-                    },
-                    Err(e) => ProviderBalance {
-                        provider_id: provider.id.clone(),
-                        provider_name: provider.name.clone(),
-                        balance: None,
-                        error: Some(e.to_string()),
-                        last_updated: None,
-                    },
+    // Use JoinSet to run all balance requests concurrently with error isolation
+    let mut join_set = tokio::task::JoinSet::new();
+
+    for provider in enabled_providers {
+        let http_client = state.http_client.clone();
+        join_set.spawn(async move {
+            match provider_key::resolve_api_key(&provider.id).await {
+                Ok(Some(key)) => {
+                    let adapter = create_balance_provider(&provider.provider_type, &provider.api_base_url);
+                    match adapter.get_balance(&key, &http_client).await {
+                        Ok(balance) => ProviderBalance {
+                            provider_id: provider.id,
+                            provider_name: provider.name,
+                            balance: Some(balance),
+                            error: None,
+                            last_updated: Some(chrono::Local::now().to_rfc3339()),
+                        },
+                        Err(e) => ProviderBalance {
+                            provider_id: provider.id,
+                            provider_name: provider.name,
+                            balance: None,
+                            error: Some(e.to_string()),
+                            last_updated: None,
+                        },
+                    }
                 }
+                Ok(None) => ProviderBalance {
+                    provider_id: provider.id,
+                    provider_name: provider.name,
+                    balance: None,
+                    error: Some("API key not configured".to_string()),
+                    last_updated: None,
+                },
+                // Keychain failures for one provider must not abort the whole batch.
+                Err(e) => ProviderBalance {
+                    provider_id: provider.id,
+                    provider_name: provider.name,
+                    balance: None,
+                    error: Some(e.to_string()),
+                    last_updated: None,
+                },
             }
-            Ok(None) => ProviderBalance {
-                provider_id: provider.id.clone(),
-                provider_name: provider.name.clone(),
-                balance: None,
-                error: Some("API key not configured".to_string()),
-                last_updated: None,
-            },
-            // Keychain failures for one provider must not abort the whole batch.
-            Err(e) => ProviderBalance {
-                provider_id: provider.id.clone(),
-                provider_name: provider.name.clone(),
-                balance: None,
-                error: Some(e.to_string()),
-                last_updated: None,
-            },
-        };
-        results.push(result);
+        });
     }
+
+    // Collect results; individual task panics are logged and skipped.
+    let mut results = Vec::new();
+    while let Some(task_result) = join_set.join_next().await {
+        match task_result {
+            Ok(provider_balance) => results.push(provider_balance),
+            Err(e) => eprintln!("balance task failed: {e}"),
+        }
+    }
+
+    results.sort_by_key(|r| r.provider_id.clone());
 
     Ok(results)
 }

@@ -17,7 +17,6 @@ export function useUpdateSettings() {
     mutationFn: (settings: AppSettings) => tauriInvoke<AppSettings>('update_settings', { settings }),
     onSuccess: (data) => {
       queryClient.setQueryData([SETTINGS_KEY], data);
-      queryClient.invalidateQueries({ queryKey: [SETTINGS_KEY] });
     },
   });
 }

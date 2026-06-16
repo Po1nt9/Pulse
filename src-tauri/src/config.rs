@@ -14,7 +14,7 @@ pub struct ProviderConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ProviderType {
     // Aliases keep deserialization backward-compatible with the previous
@@ -27,6 +27,7 @@ pub enum ProviderType {
     Anthropic,
     #[serde(alias = "open_router")]
     OpenRouter,
+    #[default]
     Custom,
 }
 
@@ -52,6 +53,7 @@ impl Default for AppSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub providers: Vec<ProviderConfig>,
     pub settings: AppSettings,
@@ -243,5 +245,103 @@ mod tests {
             serde_json::from_str::<ProviderType>("\"open_router\"").unwrap(),
             ProviderType::OpenRouter
         ));
+    }
+
+    #[test]
+    fn provider_config_serde_roundtrip() {
+        let config = ProviderConfig {
+            id: "test".to_string(),
+            name: "Test Provider".to_string(),
+            provider_type: ProviderType::Custom,
+            api_base_url: "https://api.test.com".to_string(),
+            display_name: "Test".to_string(),
+            refresh_interval_seconds: 600,
+            warning_threshold_percent: 50.0,
+            enabled: false,
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let restored: ProviderConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.id, config.id);
+        assert_eq!(restored.name, config.name);
+        assert_eq!(restored.refresh_interval_seconds, config.refresh_interval_seconds);
+        assert_eq!(restored.warning_threshold_percent, config.warning_threshold_percent);
+        assert_eq!(restored.enabled, config.enabled);
+    }
+
+    #[test]
+    fn app_settings_window_position_some() {
+        let mut settings = AppSettings::default();
+        settings.window_position = Some((100, 200));
+        let json = serde_json::to_string(&settings).unwrap();
+        let restored: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.window_position, Some((100, 200)));
+    }
+
+    #[test]
+    fn app_config_empty_providers() {
+        let config = AppConfig {
+            providers: vec![],
+            settings: AppSettings::default(),
+            version: "0.1.0".to_string(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let restored: AppConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.providers.len(), 0);
+    }
+
+    #[test]
+    fn provider_type_lowercase_deserialization() {
+        // lowercase should work
+        assert!(matches!(
+            serde_json::from_str::<ProviderType>("\"deepseek\"").unwrap(),
+            ProviderType::DeepSeek
+        ));
+        assert!(matches!(
+            serde_json::from_str::<ProviderType>("\"anthropic\"").unwrap(),
+            ProviderType::Anthropic
+        ));
+        assert!(matches!(
+            serde_json::from_str::<ProviderType>("\"custom\"").unwrap(),
+            ProviderType::Custom
+        ));
+    }
+
+    #[test]
+    fn provider_type_invalid_variant_fails() {
+        let result = serde_json::from_str::<ProviderType>("\"invalid_provider\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn app_settings_boundary_values() {
+        let settings = AppSettings {
+            theme: "light".to_string(),
+            auto_start: true,
+            global_refresh_interval: 0,
+            show_notifications: false,
+            window_position: Some((i32::MIN, i32::MAX)),
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        let restored: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.global_refresh_interval, 0);
+        assert_eq!(restored.window_position, Some((i32::MIN, i32::MAX)));
+    }
+
+    #[test]
+    fn provider_config_boundary_threshold() {
+        let config = ProviderConfig {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            provider_type: ProviderType::DeepSeek,
+            api_base_url: "https://api.test.com".to_string(),
+            display_name: "Test".to_string(),
+            refresh_interval_seconds: u64::MAX,
+            warning_threshold_percent: 100.0,
+            enabled: true,
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let restored: ProviderConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.refresh_interval_seconds, u64::MAX);
+        assert_eq!(restored.warning_threshold_percent, 100.0);
     }
 }

@@ -1,0 +1,40 @@
+# 依赖目录
+node_modules/
+
+# Tauri 构建产物
+src-tauri/target/
+
+# Git
+.git/
+.gitignore
+
+# 构建产物
+dist/
+
+# 文档（保留 README）
+*.md
+!README.md
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 本地环境文件
+.env
+.env.local
+.env.*.local
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+
+# 临时文件
+*.tmp
+*.temp
+*.log
