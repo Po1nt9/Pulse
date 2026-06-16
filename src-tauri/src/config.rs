@@ -14,7 +14,7 @@ pub struct ProviderConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ProviderType {
     // Aliases keep deserialization backward-compatible with the previous
@@ -27,6 +27,7 @@ pub enum ProviderType {
     Anthropic,
     #[serde(alias = "open_router")]
     OpenRouter,
+    #[default]
     Custom,
 }
 
@@ -52,6 +53,7 @@ impl Default for AppSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     pub providers: Vec<ProviderConfig>,
     pub settings: AppSettings,
@@ -288,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_type_case_insensitive_deserialization() {
+    fn provider_type_lowercase_deserialization() {
         // lowercase should work
         assert!(matches!(
             serde_json::from_str::<ProviderType>("\"deepseek\"").unwrap(),

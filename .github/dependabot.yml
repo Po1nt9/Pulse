@@ -10,7 +10,7 @@ updates:
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 10
     reviewers:
-      - "pulse-app/maintainers"
+      - "Po1nt9"
     labels:
       - "dependencies"
       - "npm"
@@ -28,7 +28,7 @@ updates:
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 10
     reviewers:
-      - "pulse-app/maintainers"
+      - "Po1nt9"
     labels:
       - "dependencies"
       - "rust"
@@ -46,7 +46,7 @@ updates:
       timezone: "Asia/Shanghai"
     open-pull-requests-limit: 5
     reviewers:
-      - "pulse-app/maintainers"
+      - "Po1nt9"
     labels:
       - "dependencies"
       - "github-actions"

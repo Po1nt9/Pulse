@@ -34,11 +34,11 @@ pub fn handle_response_status(status: u16, body: &str) -> crate::error::Result<(
         429 => Err(crate::error::AppError::RateLimited),
         400..=499 => Err(crate::error::AppError::Api {
             status,
-            message: format!("Client error: {}", body),
+            message: format!("Client error: {}", body.chars().take(200).collect::<String>()),
         }),
         500..=599 => Err(crate::error::AppError::Api {
             status,
-            message: format!("Server error: {}", body),
+            message: format!("Server error: {}", body.chars().take(200).collect::<String>()),
         }),
         _ => Err(crate::error::AppError::Unknown(format!("Unexpected status: {}", status))),
     }

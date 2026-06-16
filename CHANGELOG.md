@@ -4,6 +4,30 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- ESLint 9 flat config 与 Prettier 配置
+- CI lint job、Release workflow、Dependabot
+- Issue/PR 模板、CODEOWNERS、LICENSE、.editorconfig
+- AGENTS.md 扩充项目开发规范
+
+### 修复
+
+- NotificationToast 重复清理与孤儿条目泄漏
+- useSettings 冗余的 invalidateQueries 调用
+- window.rs async 路径中的 blocking_read
+- error.rs serde 序列化简化
+- package.json lint 脚本 ESLint 9 兼容性
+- CODEOWNERS/dependabot/模板中的仓库 owner 引用（pulse-app → Po1nt9）
+
+### 变更
+
+- refresh_all_balances 改用 JoinSet 实现并发
+- React Query 默认参数针对 Tauri 调优
+- ci.yml test job 不再安装未使用的 npm 依赖
+
 ## [0.1.0] - 2026-06-16
 
 ### 新增
@@ -27,13 +51,3 @@
 - Zustand 管理 UI state，TanStack Query 管理 server state
 - Tailwind CSS + Recharts + lucide-react 构建 UI
 - 统一 provider trait 抽象不同供应商 API
-
-## [Unreleased]
-
-### 计划
-
-- 历史数据持久化与导出
-- 更多图表类型（饼图、折线图）
-- 多语言支持
-- 自动更新检查
-- 快捷键支持

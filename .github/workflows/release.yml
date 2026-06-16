@@ -73,25 +73,36 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name || inputs.tag }}
-          releaseName: 'Pulse ${{ github.ref_name || inputs.tag }}'
-          releaseBody: 'See [CHANGELOG.md](https://github.com/pulse-app/pulse/blob/main/CHANGELOG.md) for changes.'
+          tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseName: "Pulse ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          releaseBody: 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/CHANGELOG.md) for changes.'
           releaseDraft: true
           prerelease: ${{ inputs.prerelease || false }}
 
   create-release:
-    name: Create Release
+    name: Publish Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Get tag
-        id: tag
-        run: echo "tag=${GITHUB_REF_NAME:-${{ inputs.tag }}}" >> $GITHUB_OUTPUT
+        id: get-tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Publish Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit ${{ steps.tag.outputs.tag }} --draft=false
+          gh release edit ${{ steps.get-tag.outputs.tag }} --draft=false

@@ -46,6 +46,9 @@ mod tests {
     fn error_serde_roundtrip_network() {
         let err = AppError::Network("timeout".to_string());
         let json = serde_json::to_string(&err).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["type"], "Network");
+        assert_eq!(v["message"], "timeout");
         let de: AppError = serde_json::from_str(&json).unwrap();
         assert!(matches!(de, AppError::Network(s) if s == "timeout"));
     }
@@ -54,6 +57,10 @@ mod tests {
     fn error_serde_roundtrip_api() {
         let err = AppError::Api { status: 429, message: "rate limited".to_string() };
         let json = serde_json::to_string(&err).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(v["type"], "Api");
+        assert_eq!(v["message"]["status"], 429);
+        assert_eq!(v["message"]["message"], "rate limited");
         let de: AppError = serde_json::from_str(&json).unwrap();
         assert!(matches!(de, AppError::Api { status: 429, message: ref m } if m == "rate limited"));
     }

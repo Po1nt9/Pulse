@@ -16,6 +16,14 @@ export function NotificationToast() {
     const timer = setInterval(() => {
       const now = Date.now();
       const currentToasts = useToastStore.getState().toasts;
+      const currentIds = new Set(currentToasts.map((t) => t.id));
+
+      // 清理已手动移除的 toast 在 ref 中的孤立记录
+      addedAtMap.forEach((_, id) => {
+        if (!currentIds.has(id)) {
+          addedAtMap.delete(id);
+        }
+      });
 
       // 记录新 toast 的添加时间
       currentToasts.forEach((t) => {
@@ -46,7 +54,7 @@ export function NotificationToast() {
         }
       });
     };
-  }, [removeToast]);
+  }, []);
 
   if (toasts.length === 0) return null;
 
@@ -64,7 +72,10 @@ export function NotificationToast() {
           {toast.type === 'info' && <Info className="w-4 h-4 text-accent" />}
           <span className="text-sm text-white/80 flex-1">{toast.message}</span>
           <button
-            onClick={() => removeToast(toast.id)}
+            onClick={() => {
+              toastAddedAt.current.delete(toast.id);
+              removeToast(toast.id);
+            }}
             className="text-white/40 hover:text-white/60"
             aria-label="关闭通知"
           >

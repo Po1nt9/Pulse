@@ -114,13 +114,16 @@ pub async fn refresh_all_balances(state: State<'_, AppState>) -> Result<Vec<Prov
         });
     }
 
-    // Collect results; individual task panics are silently skipped.
+    // Collect results; individual task panics are logged and skipped.
     let mut results = Vec::new();
     while let Some(task_result) = join_set.join_next().await {
-        if let Ok(provider_balance) = task_result {
-            results.push(provider_balance);
+        match task_result {
+            Ok(provider_balance) => results.push(provider_balance),
+            Err(e) => eprintln!("balance task failed: {e}"),
         }
     }
+
+    results.sort_by_key(|r| r.provider_id.clone());
 
     Ok(results)
 }

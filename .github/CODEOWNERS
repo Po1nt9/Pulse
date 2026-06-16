@@ -1,21 +1,21 @@
 # 默认代码所有者
-* @pulse-team/core
+* @Po1nt9
 
 # 前端代码
-/src/**/*.tsx @pulse-team/frontend
-/src/**/*.ts @pulse-team/frontend
+/src/**/*.tsx @Po1nt9
+/src/**/*.ts @Po1nt9
 
 # Rust 后端
-/src-tauri/**/*.rs @pulse-team/backend
+/src-tauri/**/*.rs @Po1nt9
 
 # 配置文件
-/package.json @pulse-team/core
-/Cargo.toml @pulse-team/core
-/*.config.js @pulse-team/frontend
+/package.json @Po1nt9
+/src-tauri/Cargo.toml @Po1nt9
+/*.config.js @Po1nt9
 
 # 文档
-/docs/**/*.md @pulse-team/docs
-/*.md @pulse-team/core
+/docs/**/*.md @Po1nt9
+/*.md @Po1nt9
 
 # CI/CD
-/.github/workflows/** @pulse-team/devops
+/.github/workflows/** @Po1nt9
