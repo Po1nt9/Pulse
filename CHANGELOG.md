@@ -11,7 +11,6 @@
 - ESLint 9 flat config 与 Prettier 配置
 - CI lint job、Release workflow、Dependabot
 - Issue/PR 模板、CODEOWNERS、LICENSE、.editorconfig
-- AGENTS.md 扩充项目开发规范
 
 ### 修复
 
