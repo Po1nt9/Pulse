@@ -33,6 +33,9 @@
 - [x] Task 5.3: 核对目录布局：`src/`、`src-tauri/src/`、`.github/`、`docs/`、`.agents/skills/` 等是否清晰合理；必要时小幅调整。
 - [x] Task 5.4: 在 `master` 上以一次提交合入整理改动并推送；输出最终目录树与变更说明。
 
+## 阶段 5 补充：移除误提交的 Tauri 生成产物
+- [ ] Task 5.5: 在 `.gitignore` 中添加 `src-tauri/gen/` 忽略规则；从仓库删除 `src-tauri/gen/schemas/` 下所有自动生成的 schema 文件（acl-manifests.json、capabilities.json、desktop-schema.json、linux-schema.json、windows-schema.json，共 454KB）；提交并推送到 master。
+
 # Task Dependencies
 - Task 1.1 / 1.2 / 1.3 / 1.4 互相独立，可并发。
 - Task 2.1 / 2.2 / 2.3 / 2.4 分别依赖 1.1 / 1.2 / 1.3 / 1.4；四者可并发，但都修改同一分支，提交需串行化（由主流程汇总后统一提交，见 Task 2.5）。
