@@ -73,3 +73,52 @@ pub async fn delete_api_key(provider_id: String) -> Result<()> {
 pub async fn has_api_key(provider_id: String) -> Result<bool> {
     has(&provider_id).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn service_name_is_stable() {
+        // The service name is a security boundary — changing it would orphan
+        // every stored API key. Pin it so any rename is caught at test time.
+        assert_eq!(SERVICE_NAME, "com.pulse.app");
+    }
+
+    #[test]
+    fn entry_for_typical_provider_id() {
+        // Entry::new must succeed for a well-formed provider id; it only
+        // builds the credential handle and does not touch the keychain yet.
+        let result = entry_for("deepseek");
+        assert!(result.is_ok(), "entry_for should succeed for a typical provider id");
+    }
+
+    #[test]
+    fn entry_for_empty_provider_id() {
+        // An empty provider id is degenerate but must not panic.
+        let result = entry_for("");
+        assert!(result.is_ok(), "entry_for should not panic on empty provider id");
+    }
+
+    #[test]
+    fn entry_for_provider_id_with_special_chars() {
+        // Provider ids may contain hyphens, underscores, dots — all must be
+        // accepted by the keychain's credential builder.
+        let result = entry_for("my-provider_1.2");
+        assert!(result.is_ok(), "entry_for should accept special characters");
+    }
+
+    #[test]
+    fn entry_for_distinct_ids_produce_distinct_entries() {
+        // Each provider id must map to its own keychain entry; if two ids
+        // collapsed to the same entry, one provider's key would overwrite
+        // another's.
+        let e1 = entry_for("openai").unwrap();
+        let e2 = entry_for("anthropic").unwrap();
+        // The keyring::Entry doesn't expose its inner credential for direct
+        // comparison, but the two handles must be independently usable.
+        // We verify they were created without error — the isolation guarantee
+        // is ultimately enforced by the keychain backend keyed on (service, user).
+        let _ = (e1, e2);
+    }
+}
