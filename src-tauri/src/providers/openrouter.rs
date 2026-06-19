@@ -48,22 +48,29 @@ impl BalanceProvider for OpenRouterProvider {
         let data: OpenRouterBalanceResponse = serde_json::from_str(&body)
             .map_err(|e| crate::error::AppError::Unknown(format!("Parse error: {}", e)))?;
 
-        let remaining = data.data.credits_remaining;
-        let total = data.data.total_credits;
-        let used = total - remaining;
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-
-        Ok(BalanceInfo {
-            total,
-            used,
-            remaining,
-            currency: "USD".to_string(),
-            percentage_used: percentage,
-        })
+        Ok(balance_from_response(&data))
     }
 
     fn provider_name(&self) -> &str {
         "OpenRouter"
+    }
+}
+
+/// Pure transformation from a parsed OpenRouter balance response into `BalanceInfo`.
+/// Extracted from `get_balance` so the used/percentage computation is testable
+/// without the network.
+fn balance_from_response(data: &OpenRouterBalanceResponse) -> BalanceInfo {
+    let remaining = data.data.credits_remaining;
+    let total = data.data.total_credits;
+    let used = total - remaining;
+    let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+
+    BalanceInfo {
+        total,
+        used,
+        remaining,
+        currency: "USD".to_string(),
+        percentage_used: percentage,
     }
 }
 
@@ -111,22 +118,73 @@ mod tests {
     }
 
     #[test]
-    fn balance_calculation() {
-        let remaining = 25.0;
-        let total = 100.0;
-        let used = total - remaining;
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-        assert_eq!(used, 75.0);
-        assert_eq!(percentage, 75.0);
+    fn balance_from_response_valid() {
+        let data = OpenRouterBalanceResponse {
+            data: OpenRouterData {
+                credits_remaining: 25.0,
+                total_credits: 100.0,
+            },
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.remaining, 25.0);
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.used, 75.0);
+        assert_eq!(info.percentage_used, 75.0);
+        assert_eq!(info.currency, "USD");
     }
 
     #[test]
-    fn balance_calculation_zero_total() {
-        let total = 0.0;
-        let remaining = 0.0;
-        let used = total - remaining;
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-        assert_eq!(used, 0.0);
-        assert_eq!(percentage, 0.0);
+    fn balance_from_response_zero_total_avoids_division_by_zero() {
+        // total_credits == 0 → percentage guard must yield 0.0, not NaN/inf.
+        let data = OpenRouterBalanceResponse {
+            data: OpenRouterData {
+                credits_remaining: 0.0,
+                total_credits: 0.0,
+            },
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.used, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
+        assert!(!info.percentage_used.is_nan());
+    }
+
+    #[test]
+    fn balance_from_response_remaining_exceeds_total_yields_negative_used() {
+        // Documents current behavior: when remaining > total, `used` goes
+        // negative. Pins the contract so a future clamping change is intentional.
+        let data = OpenRouterBalanceResponse {
+            data: OpenRouterData {
+                credits_remaining: 120.0,
+                total_credits: 100.0,
+            },
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.remaining, 120.0);
+        assert_eq!(info.used, -20.0);
+        assert_eq!(info.percentage_used, -20.0);
+    }
+
+    #[test]
+    fn balance_from_response_full_usage() {
+        let data = OpenRouterBalanceResponse {
+            data: OpenRouterData {
+                credits_remaining: 0.0,
+                total_credits: 100.0,
+            },
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.used, 100.0);
+        assert_eq!(info.percentage_used, 100.0);
+    }
+
+    #[test]
+    fn balance_from_response_from_empty_json_body() {
+        // `{}` deserializes via serde defaults (nested `data` defaults too);
+        // computation must not panic.
+        let data: OpenRouterBalanceResponse = serde_json::from_str("{}").unwrap();
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
     }
 }

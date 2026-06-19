@@ -42,22 +42,29 @@ impl BalanceProvider for AnthropicProvider {
         let data: AnthropicBalanceResponse = serde_json::from_str(&body)
             .map_err(|e| crate::error::AppError::Unknown(format!("Parse error: {}", e)))?;
 
-        let remaining = data.credits_remaining;
-        let used = data.credits_used;
-        let total = remaining + used;
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-
-        Ok(BalanceInfo {
-            total,
-            used,
-            remaining,
-            currency: "USD".to_string(),
-            percentage_used: percentage,
-        })
+        Ok(balance_from_response(&data))
     }
 
     fn provider_name(&self) -> &str {
         "Anthropic"
+    }
+}
+
+/// Pure transformation from a parsed Anthropic balance response into `BalanceInfo`.
+/// Extracted from `get_balance` so the total/percentage computation is testable
+/// without the network.
+fn balance_from_response(data: &AnthropicBalanceResponse) -> BalanceInfo {
+    let remaining = data.credits_remaining;
+    let used = data.credits_used;
+    let total = remaining + used;
+    let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+
+    BalanceInfo {
+        total,
+        used,
+        remaining,
+        currency: "USD".to_string(),
+        percentage_used: percentage,
     }
 }
 
@@ -105,21 +112,50 @@ mod tests {
     }
 
     #[test]
-    fn balance_calculation() {
-        let remaining = 50.0;
-        let used = 50.0;
-        let total = remaining + used;
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-        assert_eq!(total, 100.0);
-        assert_eq!(percentage, 50.0);
+    fn balance_from_response_valid() {
+        let data = AnthropicBalanceResponse {
+            credits_remaining: 50.0,
+            credits_used: 50.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.remaining, 50.0);
+        assert_eq!(info.used, 50.0);
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.percentage_used, 50.0);
+        assert_eq!(info.currency, "USD");
     }
 
     #[test]
-    fn balance_calculation_zero_total() {
-        let remaining = 0.0;
-        let used = 0.0;
-        let total = remaining + used;
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-        assert_eq!(percentage, 0.0);
+    fn balance_from_response_zero_total_avoids_division_by_zero() {
+        // remaining + used == 0 → percentage guard must yield 0.0, not NaN/inf.
+        let data = AnthropicBalanceResponse {
+            credits_remaining: 0.0,
+            credits_used: 0.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
+        assert!(!info.percentage_used.is_nan());
+    }
+
+    #[test]
+    fn balance_from_response_only_remaining_no_usage() {
+        let data = AnthropicBalanceResponse {
+            credits_remaining: 100.0,
+            credits_used: 0.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.used, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
+    }
+
+    #[test]
+    fn balance_from_response_from_empty_json_body() {
+        // `{}` deserializes via serde defaults; computation must not panic.
+        let data: AnthropicBalanceResponse = serde_json::from_str("{}").unwrap();
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
     }
 }

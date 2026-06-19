@@ -60,22 +60,29 @@ impl BalanceProvider for CustomProvider {
         let data: CustomBalanceResponse = serde_json::from_str(&body)
             .map_err(|e| crate::error::AppError::Unknown(format!("Parse error: {}", e)))?;
 
-        let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
-        let used = data.used;
-        let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-
-        Ok(BalanceInfo {
-            total,
-            used,
-            remaining,
-            currency: "USD".to_string(),
-            percentage_used: percentage,
-        })
+        Ok(balance_from_response(&data))
     }
 
     fn provider_name(&self) -> &str {
         "Custom"
+    }
+}
+
+/// Pure transformation from a parsed custom-provider balance response into
+/// `BalanceInfo`. Extracted from `get_balance` so the fallback/percentage
+/// branches are testable without the network.
+fn balance_from_response(data: &CustomBalanceResponse) -> BalanceInfo {
+    let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
+    let used = data.used;
+    let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
+    let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+
+    BalanceInfo {
+        total,
+        used,
+        remaining,
+        currency: "USD".to_string(),
+        percentage_used: percentage,
     }
 }
 
@@ -107,45 +114,89 @@ mod tests {
     use super::*;
 
     #[test]
-    fn balance_response_parsing_with_total_balance() {
-        let json = r#"{"balance": 0.0, "total_balance": 100.0, "used": 30.0, "remaining": 70.0}"#;
-        let data: CustomBalanceResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(data.total_balance, 100.0);
-        assert_eq!(data.used, 30.0);
-        assert_eq!(data.remaining, 70.0);
-        
-        let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
-        let used = data.used;
-        let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-        
-        assert_eq!(total, 100.0);
-        assert_eq!(used, 30.0);
-        assert_eq!(remaining, 70.0);
-        assert_eq!(percentage, 30.0);
+    fn balance_from_response_uses_total_balance_when_positive() {
+        let data = CustomBalanceResponse {
+            balance: 0.0,
+            total_balance: 100.0,
+            used: 30.0,
+            remaining: 70.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.used, 30.0);
+        assert_eq!(info.remaining, 70.0);
+        assert_eq!(info.percentage_used, 30.0);
+        assert_eq!(info.currency, "USD");
     }
 
     #[test]
-    fn balance_response_parsing_fallback_to_balance() {
-        let json = r#"{"balance": 50.0, "total_balance": 0.0, "used": 20.0, "remaining": 0.0}"#;
-        let data: CustomBalanceResponse = serde_json::from_str(json).unwrap();
-        
-        let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
-        let used = data.used;
-        let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
-        
-        assert_eq!(total, 50.0);
-        assert_eq!(remaining, 30.0);
+    fn balance_from_response_falls_back_to_balance_field() {
+        // total_balance <= 0 → total must fall back to the `balance` field.
+        let data = CustomBalanceResponse {
+            balance: 50.0,
+            total_balance: 0.0,
+            used: 20.0,
+            remaining: 0.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 50.0);
+        assert_eq!(info.used, 20.0);
+        // remaining <= 0 → falls back to total - used.
+        assert_eq!(info.remaining, 30.0);
+        assert_eq!(info.percentage_used, 40.0);
     }
 
     #[test]
-    fn balance_response_parsing_defaults() {
-        let json = r#"{}"#;
-        let data: CustomBalanceResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(data.balance, 0.0);
-        assert_eq!(data.total_balance, 0.0);
-        assert_eq!(data.used, 0.0);
-        assert_eq!(data.remaining, 0.0);
+    fn balance_from_response_falls_back_when_total_balance_negative() {
+        // Negative total_balance must also trigger the fallback (guard is `> 0.0`).
+        let data = CustomBalanceResponse {
+            balance: 80.0,
+            total_balance: -5.0,
+            used: 10.0,
+            remaining: 70.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 80.0);
+    }
+
+    #[test]
+    fn balance_from_response_falls_back_when_remaining_negative() {
+        // remaining <= 0 → remaining falls back to total - used.
+        let data = CustomBalanceResponse {
+            balance: 0.0,
+            total_balance: 100.0,
+            used: 40.0,
+            remaining: -1.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.remaining, 60.0);
+    }
+
+    #[test]
+    fn balance_from_response_zero_total_avoids_division_by_zero() {
+        // total == 0 → percentage guard must yield 0.0, not NaN/inf.
+        let data = CustomBalanceResponse {
+            balance: 0.0,
+            total_balance: 0.0,
+            used: 0.0,
+            remaining: 0.0,
+        };
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
+        assert!(!info.percentage_used.is_nan());
+    }
+
+    #[test]
+    fn balance_from_response_all_fields_default() {
+        // Empty `{}` body deserializes to all-zero; computation must not panic.
+        let data: CustomBalanceResponse = serde_json::from_str("{}").unwrap();
+        let info = balance_from_response(&data);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.used, 0.0);
+        assert_eq!(info.remaining, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
     }
 
     #[test]
