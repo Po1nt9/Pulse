@@ -46,6 +46,7 @@ coverage/
 
 # 工作树隔离
 .worktrees/
+.worktrees-local/
 
 # 本地数据（开发时）
 *.local
