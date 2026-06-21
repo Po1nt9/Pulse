@@ -20,7 +20,7 @@ updates:
 
   # Cargo 依赖
   - package-ecosystem: "cargo"
-    directory: "/src-tauri"
+    directory: "/apps/tauri"
     schedule:
       interval: "weekly"
       day: "monday"
