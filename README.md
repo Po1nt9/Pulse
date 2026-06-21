@@ -54,35 +54,42 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
-构建产物位于 `src-tauri/target/release/` 目录。
+构建产物位于 `apps/tauri/target/release/` 目录。
 
 ## 项目结构
 
 ```
 .
-├── src/                          # 前端源码
-│   ├── components/               # React 组件
-│   ├── hooks/                    # React Query Hooks
-│   ├── store/                    # Zustand Store
-│   ├── types/                    # TypeScript 类型定义
-│   ├── utils/                    # 工具函数
-│   ├── App.tsx                   # 应用根组件
-│   └── main.tsx                  # 入口文件
-├── src-tauri/                    # Tauri / Rust 后端
-│   ├── src/
-│   │   ├── commands/             # Tauri Commands
-│   │   ├── providers/            # Provider Adapters
-│   │   ├── error.rs              # 错误处理
-│   │   ├── config.rs             # 配置管理
-│   │   ├── http.rs               # HTTP Client
-│   │   ├── keychain.rs           # Keychain 存储
-│   │   ├── tray.rs               # 托盘图标管理
-│   │   ├── window.rs             # 窗口管理
-│   │   └── lib.rs                # 库入口
-│   ├── icons/                    # 应用图标
-│   └── Cargo.toml                # Rust 依赖
-├── docs/                         # 文档
-└── package.json                  # 前端配置
+├── apps/
+│   ├── web/                        # 前端（Vite + React + TS）
+│   │   ├── src/
+│   │   │   ├── components/         # React 组件
+│   │   │   ├── hooks/              # React Query Hooks
+│   │   │   ├── store/              # Zustand Store
+│   │   │   ├── types/              # TypeScript 类型定义
+│   │   │   ├── utils/              # 工具函数
+│   │   │   ├── App.tsx             # 应用根组件
+│   │   │   └── main.tsx            # 入口文件
+│   │   ├── index.html
+│   │   ├── vite.config.ts
+│   │   ├── tsconfig.json
+│   │   ├── tailwind.config.js
+│   │   └── eslint.config.js
+│   └── tauri/                      # Tauri / Rust 后端
+│       ├── src/
+│       │   ├── commands/           # Tauri Commands
+│       │   ├── providers/          # Provider Adapters
+│       │   ├── error.rs            # 错误处理
+│       │   ├── config.rs           # 配置管理
+│       │   ├── http.rs             # HTTP Client
+│       │   ├── keychain.rs         # Keychain 存储
+│       │   ├── tray.rs             # 托盘图标管理
+│       │   ├── window.rs           # 窗口管理
+│       │   └── lib.rs              # 库入口
+│       ├── icons/                  # 应用图标
+│       └── Cargo.toml              # Rust 依赖
+├── docs/                           # 项目文档
+└── package.json                    # 前端配置（单根包）
 ```
 
 ## 配置说明
@@ -120,4 +127,4 @@ npm run tauri:build
 
 ## 更新日志
 
-详见 [CHANGELOG.md](CHANGELOG.md)
+详见 [CHANGELOG.md](docs/CHANGELOG.md)
