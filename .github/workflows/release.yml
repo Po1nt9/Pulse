@@ -39,17 +39,7 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        id: npm-cache
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
       - name: Install dependencies
-        if: steps.npm-cache.outputs.cache-hit != 'true'
         run: npm ci
 
       - name: Setup Rust
@@ -69,40 +59,59 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Build Tauri
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          releaseName: "Pulse ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          releaseBody: 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/docs/CHANGELOG.md) for changes.'
-          releaseDraft: true
-          prerelease: ${{ inputs.prerelease || false }}
+        run: npm run tauri:build
 
-  create-release:
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulse-${{ matrix.platform }}
+          path: |
+            apps/tauri/target/release/bundle/**
+            apps/tauri/target/release/pulse
+            apps/tauri/target/release/pulse.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
     name: Publish Release
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Get tag
-        id: get-tag
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-          EVENT_NAME: ${{ github.event_name }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
-          fi
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Publish Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release edit ${{ steps.get-tag.outputs.tag }} --draft=false
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+
+          # Collect all files (recursive, sorted)
+          files=()
+          while IFS= read -r -d '' file; do
+            files+=("$file")
+          done < <(find artifacts -type f -print0 | sort -uz)
+
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No artifacts found under artifacts/"
+            exit 1
+          fi
+
+          echo "Files to upload (${#files[@]}):"
+          printf '  %s\n' "${files[@]}"
+
+          # Create as draft first (safer than partial publish on error)
+          gh release create "$TAG" \
+            --title "Pulse $TAG" \
+            --notes 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/docs/CHANGELOG.md) for changes.' \
+            --target "${{ github.sha }}" \
+            --draft \
+            "${files[@]}"
+
+          # Un-draft unless explicitly marked as prerelease
+          if [ "${{ inputs.prerelease }}" != "true" ]; then
+            gh release edit "$TAG" --draft=false
+          fi
