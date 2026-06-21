@@ -107,7 +107,7 @@ jobs:
           # Keep the NSIS installer with its original name (already versioned)
           find artifacts/pulse-windows-latest/bundle -type f -exec cp {} staged/ \;
 
-          if [ ! -d staged ] || [ -z "$(ls -A staged)" ]; then
+          if [ -z "$(ls -A staged 2>/dev/null)" ]; then
             echo "::error::No artifacts to upload"
             exit 1
           fi
@@ -115,13 +115,19 @@ jobs:
           echo "Files to upload:"
           ls -la staged/
 
-          # Create as draft first (safer than partial publish on error)
+          # Create empty draft release first (safer: failure leaves no partial release)
           gh release create "$TAG" \
             --title "Pulse $TAG" \
             --notes 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/docs/CHANGELOG.md) for changes.' \
             --target "${{ github.sha }}" \
-            --draft \
-            staged/*
+            --draft
+
+          # Upload each asset separately so the filename is preserved exactly
+          # (gh release create ... files uses basenames and clashes on duplicates)
+          for f in staged/*; do
+            echo "Uploading $(basename "$f")"
+            gh release upload "$TAG" "$f" --clobber
+          done
 
           # Un-draft unless explicitly marked as prerelease
           if [ "${{ inputs.prerelease }}" != "true" ]; then
