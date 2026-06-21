@@ -5,7 +5,6 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
-    root: true,
     ignores: ['node_modules/', 'dist/', '../tauri/', '*.config.js'],
   },
   js.configs.recommended,
