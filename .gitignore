@@ -6,8 +6,8 @@ dist/
 out/
 
 # Tauri 构建产物
-src-tauri/target/
-src-tauri/gen/
+apps/tauri/target/
+apps/tauri/gen/
 
 # 本地环境文件
 .env
