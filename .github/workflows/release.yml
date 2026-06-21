@@ -91,19 +91,29 @@ jobs:
         run: |
           TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
 
-          # Collect all files (recursive, sorted)
-          files=()
-          while IFS= read -r -d '' file; do
-            files+=("$file")
-          done < <(find artifacts -type f -print0 | sort -uz)
+          # Stage files with explicit platform-prefixed names to avoid basename clashes
+          # (linux + macos binaries are both named 'pulse').
+          mkdir -p staged
 
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::error::No artifacts found under artifacts/"
+          if [ -f artifacts/pulse-ubuntu-latest/pulse ]; then
+            cp artifacts/pulse-ubuntu-latest/pulse staged/pulse-linux-x86_64
+          fi
+          if [ -f artifacts/pulse-macos-latest/pulse ]; then
+            cp artifacts/pulse-macos-latest/pulse staged/pulse-macos-x86_64
+          fi
+          if [ -f artifacts/pulse-windows-latest/pulse.exe ]; then
+            cp artifacts/pulse-windows-latest/pulse.exe staged/pulse-windows-x86_64.exe
+          fi
+          # Keep the NSIS installer with its original name (already versioned)
+          find artifacts/pulse-windows-latest/bundle -type f -exec cp {} staged/ \;
+
+          if [ ! -d staged ] || [ -z "$(ls -A staged)" ]; then
+            echo "::error::No artifacts to upload"
             exit 1
           fi
 
-          echo "Files to upload (${#files[@]}):"
-          printf '  %s\n' "${files[@]}"
+          echo "Files to upload:"
+          ls -la staged/
 
           # Create as draft first (safer than partial publish on error)
           gh release create "$TAG" \
@@ -111,7 +121,7 @@ jobs:
             --notes 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/docs/CHANGELOG.md) for changes.' \
             --target "${{ github.sha }}" \
             --draft \
-            "${files[@]}"
+            staged/*
 
           # Un-draft unless explicitly marked as prerelease
           if [ "${{ inputs.prerelease }}" != "true" ]; then
