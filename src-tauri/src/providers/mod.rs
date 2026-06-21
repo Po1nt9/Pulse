@@ -81,3 +81,53 @@ pub fn create_usage_provider(
         crate::config::ProviderType::Custom => Box::new(custom::CustomProvider::with_url(api_base_url.to_string())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ProviderType;
+
+    // The factory is the single dispatch point shared by `commands::balance`
+    // and `commands::usage`. A swapped or missing match arm silently routes
+    // every balance/usage request for a provider class to the wrong upstream
+    // API, so lock the variant → provider contract for every branch.
+    #[test]
+    fn create_balance_provider_maps_each_variant() {
+        let cases = [
+            (ProviderType::DeepSeek, "DeepSeek"),
+            (ProviderType::OpenAi, "OpenAI"),
+            (ProviderType::Anthropic, "Anthropic"),
+            (ProviderType::OpenRouter, "OpenRouter"),
+            (ProviderType::Custom, "Custom"),
+        ];
+        for (variant, expected) in cases {
+            let provider = create_balance_provider(&variant, "https://custom.example.com");
+            assert_eq!(
+                provider.provider_name(),
+                expected,
+                "balance provider mismatch for variant {:?}",
+                variant
+            );
+        }
+    }
+
+    #[test]
+    fn create_usage_provider_maps_each_variant() {
+        let cases = [
+            (ProviderType::DeepSeek, "DeepSeek"),
+            (ProviderType::OpenAi, "OpenAI"),
+            (ProviderType::Anthropic, "Anthropic"),
+            (ProviderType::OpenRouter, "OpenRouter"),
+            (ProviderType::Custom, "Custom"),
+        ];
+        for (variant, expected) in cases {
+            let provider = create_usage_provider(&variant, "https://custom.example.com");
+            assert_eq!(
+                provider.provider_name(),
+                expected,
+                "usage provider mismatch for variant {:?}",
+                variant
+            );
+        }
+    }
+}
