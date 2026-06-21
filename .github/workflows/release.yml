@@ -90,29 +90,46 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"  # strip leading 'v' (v0.1.1 → 0.1.1)
 
-          # Stage files with explicit platform-prefixed names to avoid basename clashes
-          # (linux + macos binaries are both named 'pulse').
+          # Stage files with standardized naming: pulse-<version>-<platform>-<arch>[.ext]
           mkdir -p staged
 
+          # Raw binaries (Tauri names them "pulse" on linux/macos, "pulse.exe" on windows)
           if [ -f artifacts/pulse-ubuntu-latest/pulse ]; then
-            cp artifacts/pulse-ubuntu-latest/pulse staged/pulse-linux-x86_64
+            cp artifacts/pulse-ubuntu-latest/pulse staged/pulse-${VERSION}-linux-x86_64
           fi
           if [ -f artifacts/pulse-macos-latest/pulse ]; then
-            cp artifacts/pulse-macos-latest/pulse staged/pulse-macos-x86_64
+            cp artifacts/pulse-macos-latest/pulse staged/pulse-${VERSION}-macos-x86_64
           fi
           if [ -f artifacts/pulse-windows-latest/pulse.exe ]; then
-            cp artifacts/pulse-windows-latest/pulse.exe staged/pulse-windows-x86_64.exe
+            cp artifacts/pulse-windows-latest/pulse.exe staged/pulse-${VERSION}-windows-x86_64.exe
           fi
-          # Keep the NSIS installer with its original name (already versioned)
-          find artifacts/pulse-windows-latest/bundle -type f -exec cp {} staged/ \;
+
+          # Bundle artifacts (installers) — rename Tauri-generated names to standard format
+          if [ -d artifacts/pulse-windows-latest/bundle ]; then
+            while IFS= read -r -d '' f; do
+              base=$(basename "$f")
+              case "$base" in
+                Pulse_*_x64-setup.exe)
+                  mv "$f" "staged/pulse-${VERSION}-windows-x86_64-setup.exe"
+                  ;;
+                Pulse_*_x64_en-US.msi)
+                  mv "$f" "staged/pulse-${VERSION}-windows-x86_64.msi"
+                  ;;
+                *)
+                  mv "$f" "staged/$base"
+                  ;;
+              esac
+            done < <(find artifacts/pulse-windows-latest/bundle -type f -print0)
+          fi
 
           if [ -z "$(ls -A staged 2>/dev/null)" ]; then
             echo "::error::No artifacts to upload"
             exit 1
           fi
 
-          echo "Files to upload:"
+          echo "Files to upload (version ${VERSION}):"
           ls -la staged/
 
           # Create empty draft release first (safer: failure leaves no partial release)
