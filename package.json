@@ -4,16 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "vite --config apps/web/vite.config.ts",
+    "build": "tsc -p apps/web && vite build --config apps/web/vite.config.ts",
+    "preview": "vite preview --config apps/web/vite.config.ts",
+    "lint": "eslint --config apps/web/eslint.config.js apps/web/src",
+    "typecheck": "tsc --noEmit -p apps/web",
+    "format": "prettier --write \"apps/web/src/**/*.{ts,tsx,css,html}\"",
     "test": "npm run lint",
-    "preview": "vite preview",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "lint": "eslint src --report-unused-disable-directives --max-warnings 0",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write src"
+    "tauri": "tauri --config apps/tauri/tauri.conf.json",
+    "tauri:dev": "tauri dev --config apps/tauri/tauri.conf.json",
+    "tauri:build": "tauri build --config apps/tauri/tauri.conf.json"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.28.4",
