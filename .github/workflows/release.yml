@@ -58,7 +58,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 'src-tauri'
+          workspaces: 'apps/tauri'
           cache-targets: false
           cache-on-failure: true
 
@@ -75,7 +75,7 @@ jobs:
         with:
           tagName: "${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           releaseName: "Pulse ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          releaseBody: 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/CHANGELOG.md) for changes.'
+          releaseBody: 'See [CHANGELOG.md](https://github.com/Po1nt9/Pulse/blob/master/docs/CHANGELOG.md) for changes.'
           releaseDraft: true
           prerelease: ${{ inputs.prerelease || false }}
 
