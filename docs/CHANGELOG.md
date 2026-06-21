@@ -27,6 +27,20 @@
 - React Query 默认参数针对 Tauri 调优
 - ci.yml test job 不再安装未使用的 npm 依赖
 
+## [0.1.1] - 2026-06-21
+
+### 变更
+
+- 仓库重组为 `apps/` 单仓布局：
+  - `src/` → `apps/web/`（前端源码 + 工具链配置）
+  - `src-tauri/` → `apps/tauri/`（Tauri/Rust 后端）
+  - `CHANGELOG.md` / `LICENSE` → `docs/`
+  - README、CI/CD、CODEOWNERS、Dependabot 路径同步更新
+
+### 修复
+
+- Release workflow：tauri-action 在 Linux/macOS 找不到 bundle 产物导致矩阵失败、release 卡 draft；改用 `actions/upload-artifact` 显式 glob + `gh release upload` 分步上传，产物文件名稳定（Linux/macOS/Windows 二进制 + NSIS 安装包 4 件齐）
+
 ## [0.1.0] - 2026-06-16
 
 ### 新增
