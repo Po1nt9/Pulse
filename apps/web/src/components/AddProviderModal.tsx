@@ -32,7 +32,10 @@ export function AddProviderModal() {
     if (type === 'custom' && !url) {
       newErrors.push('自定义供应商需要填写 API Base URL');
     }
-    if (apiKey && !apiKey.startsWith('sk-') && !apiKey.startsWith('Bearer ')) {
+    // Only validate key format for built-in providers — all of them use
+    // `sk-` prefixed keys. Custom providers may use any token format, so
+    // applying this check there blocks a core feature.
+    if (type !== 'custom' && apiKey && !apiKey.startsWith('sk-') && !apiKey.startsWith('Bearer ')) {
       newErrors.push('API Key 格式可能不正确');
     }
     setErrors(newErrors);
