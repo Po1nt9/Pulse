@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use directories::ProjectDirs;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,30 +139,44 @@ pub fn read_config_sync() -> crate::error::Result<AppConfig> {
 
 /// Synchronous config write (used during startup / spawn_blocking).
 pub fn write_config_sync(config: &AppConfig) -> crate::error::Result<()> {
-    let dir = config_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
     let content = serde_json::to_string_pretty(config)
         .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-    std::fs::write(config_path(), content)
-        .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-    Ok(())
+    write_atomic(&config_path(), &content)
 }
 
 /// Async config write — offloads blocking I/O to the tokio thread pool.
 pub async fn write_config(config: &AppConfig) -> crate::error::Result<()> {
     let config_json = serde_json::to_string_pretty(config)
         .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-    let dir = config_dir();
-    tokio::task::spawn_blocking(move || {
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-        std::fs::write(config_path(), &config_json)
-            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-        Ok(())
-    })
-    .await
-    .map_err(|e| crate::error::AppError::Config(e.to_string()))?
+    let path = config_path();
+    tokio::task::spawn_blocking(move || write_atomic(&path, &config_json))
+        .await
+        .map_err(|e| crate::error::AppError::Config(e.to_string()))?
+}
+
+/// Write `content` to `path` atomically: write to a sibling temp file, then
+/// rename it over the target. The rename is atomic on the same filesystem, so
+/// a crash mid-write can never leave a truncated/corrupt `config.json` — the
+/// file is either the previous version or the complete new version.
+fn write_atomic(path: &Path, content: &str) -> crate::error::Result<()> {
+    let dir = path
+        .parent()
+        .ok_or_else(|| crate::error::AppError::Config("config path has no parent".to_string()))?;
+    std::fs::create_dir_all(dir)
+        .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
+    let file_name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("config");
+    let tmp = dir.join(format!(".{file_name}.tmp"));
+    std::fs::write(&tmp, content)
+        .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        // Best-effort cleanup so a failed rename doesn't leave a stale temp file.
+        let _ = std::fs::remove_file(&tmp);
+        crate::error::AppError::Config(e.to_string())
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -343,5 +357,48 @@ mod tests {
         let restored: ProviderConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.refresh_interval_seconds, u64::MAX);
         assert_eq!(restored.warning_threshold_percent, 100.0);
+    }
+
+    #[test]
+    fn write_atomic_persists_content_and_leaves_no_temp_file() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("pulse-write-atomic-{nonce}"));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("config.json");
+        let tmp = dir.join(".config.json.tmp");
+        let _ = std::fs::remove_file(&target);
+        let _ = std::fs::remove_file(&tmp);
+
+        let payload = r#"{"version":"0.1.0","providers":[],"settings":{}}"#;
+        write_atomic(&target, payload).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), payload);
+        assert!(
+            !tmp.exists(),
+            "atomic write must rename the temp file away, not leave it behind"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn write_atomic_creates_parent_dir() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("pulse-write-atomic-parent-{nonce}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let target = dir.join("config.json");
+
+        write_atomic(&target, "{}").unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "{}");
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }
