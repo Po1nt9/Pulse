@@ -137,29 +137,58 @@ pub fn read_config_sync() -> crate::error::Result<AppConfig> {
     Ok(config)
 }
 
-/// Synchronous config write (used during startup / spawn_blocking).
-pub fn write_config_sync(config: &AppConfig) -> crate::error::Result<()> {
-    let dir = config_dir();
-    std::fs::create_dir_all(&dir)
+/// Write `content` to `path` atomically: write to a sibling temp file, fsync,
+/// then rename over the target. A plain `std::fs::write` truncates the file
+/// before writing, so an interrupted write (force-quit, crash, disk-full)
+/// leaves a truncated `config.json` that fails to parse on the next launch
+/// and bricks the app in a crash loop. The temp-then-rename sequence ensures
+/// the target is either fully the previous content or fully the new content.
+fn write_atomic(path: &std::path::Path, content: &str) -> crate::error::Result<()> {
+    use std::io::Write;
+
+    let dir = path.parent().ok_or_else(|| {
+        crate::error::AppError::Config(format!("config path has no parent: {}", path.display()))
+    })?;
+    std::fs::create_dir_all(dir)
         .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-    let content = serde_json::to_string_pretty(config)
-        .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-    std::fs::write(config_path(), content)
+
+    // Temp file lives in the same directory so the rename is atomic (same fs).
+    let tmp_path = {
+        let mut name = path
+            .file_name()
+            .ok_or_else(|| crate::error::AppError::Config("invalid config path".to_string()))?
+            .to_os_string();
+        name.push(".tmp");
+        path.with_file_name(name)
+    };
+
+    {
+        let mut file = std::fs::File::create(&tmp_path)
+            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
+        file.write_all(content.as_bytes())
+            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
+        file.sync_all()
+            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
+    }
+
+    std::fs::rename(&tmp_path, path)
         .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
     Ok(())
+}
+
+/// Synchronous config write (used during startup / spawn_blocking).
+pub fn write_config_sync(config: &AppConfig) -> crate::error::Result<()> {
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
+    write_atomic(&config_path(), &content)
 }
 
 /// Async config write — offloads blocking I/O to the tokio thread pool.
 pub async fn write_config(config: &AppConfig) -> crate::error::Result<()> {
     let config_json = serde_json::to_string_pretty(config)
         .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-    let dir = config_dir();
     tokio::task::spawn_blocking(move || {
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-        std::fs::write(config_path(), &config_json)
-            .map_err(|e| crate::error::AppError::Config(e.to_string()))?;
-        Ok(())
+        write_atomic(&config_path(), &config_json)
     })
     .await
     .map_err(|e| crate::error::AppError::Config(e.to_string()))?
@@ -343,5 +372,65 @@ mod tests {
         let restored: ProviderConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.refresh_interval_seconds, u64::MAX);
         assert_eq!(restored.warning_threshold_percent, 100.0);
+    }
+
+    #[test]
+    fn write_atomic_persists_content_and_leaves_no_tmp() {
+        use std::io::Read;
+
+        let dir = std::env::temp_dir();
+        let target = dir.join(format!("pulse-config-atomic-{}.json", std::process::id()));
+        let tmp = dir.join(format!(
+            "pulse-config-atomic-{}.json.tmp",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&target);
+        let _ = std::fs::remove_file(&tmp);
+
+        let payload = r#"{"version":"0.1.0","providers":[],"settings":{}}"#;
+        write_atomic(&target, payload).expect("write_atomic should succeed");
+
+        let mut read_back = String::new();
+        std::fs::File::open(&target)
+            .expect("target file should exist after atomic write")
+            .read_to_string(&mut read_back)
+            .expect("read should succeed");
+        assert_eq!(read_back, payload);
+        assert!(
+            !tmp.exists(),
+            "temp file must be renamed away, not left behind"
+        );
+
+        let _ = std::fs::remove_file(&target);
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn write_atomic_overwrites_existing_target() {
+        use std::io::Read;
+
+        let dir = std::env::temp_dir();
+        let target =
+            dir.join(format!("pulse-config-overwrite-{}.json", std::process::id()));
+        let tmp = dir.join(format!(
+            "pulse-config-overwrite-{}.json.tmp",
+            std::process::id()
+        ));
+        std::fs::write(&target, "OLD CONTENT").unwrap();
+        let _ = std::fs::remove_file(&tmp);
+
+        let payload = r#"{"version":"0.2.0"}"#;
+        write_atomic(&target, payload).expect("write_atomic should succeed");
+
+        let mut read_back = String::new();
+        std::fs::File::open(&target)
+            .expect("target file should exist")
+            .read_to_string(&mut read_back)
+            .expect("read should succeed");
+        assert_eq!(read_back, payload, "target must be fully replaced");
+        assert!(!tmp.exists(), "temp file must be renamed away");
+
+        let _ = std::fs::remove_file(&target);
+        let _ = std::fs::remove_file(&tmp);
     }
 }
