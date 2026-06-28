@@ -169,4 +169,95 @@ mod tests {
         // Just verify it doesn't panic and returns a client
         let _ = client;
     }
+
+    // ── Body truncation boundary (error messages cap at 200 chars) ──
+    // handle_response_status truncates the body to 200 chars in error
+    // messages to prevent giant API error payloads from flooding the UI
+    // and logs. Existing tests use short bodies that never exercise the
+    // truncation; these cover the boundary.
+
+    #[test]
+    fn handle_response_status_truncates_long_body_client_error() {
+        let long_body = "x".repeat(250);
+        let result = handle_response_status(400, &long_body);
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 400);
+            // "Client error: " prefix (14 chars) + first 200 body chars
+            assert_eq!(message.len(), "Client error: ".len() + 200);
+            assert!(message.starts_with("Client error: "));
+            assert!(message.ends_with(&"x".repeat(200)));
+        } else {
+            panic!("expected Api error");
+        }
+    }
+
+    #[test]
+    fn handle_response_status_truncates_long_body_server_error() {
+        let long_body = "y".repeat(500);
+        let result = handle_response_status(500, &long_body);
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 500);
+            assert_eq!(message.len(), "Server error: ".len() + 200);
+            assert!(message.starts_with("Server error: "));
+            assert!(message.ends_with(&"y".repeat(200)));
+        } else {
+            panic!("expected Api error");
+        }
+    }
+
+    #[test]
+    fn handle_response_status_body_exactly_200_not_truncated() {
+        // Boundary: a body of exactly 200 chars must pass through in full.
+        let body = "z".repeat(200);
+        let result = handle_response_status(404, &body);
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 404);
+            assert_eq!(message, format!("Client error: {}", "z".repeat(200)));
+        } else {
+            panic!("expected Api error");
+        }
+    }
+
+    #[test]
+    fn handle_response_status_truncates_multibyte_without_panic() {
+        // Truncation uses chars().take(200); verify multibyte bodies
+        // (common from CJK API errors) are handled without panic and
+        // yield at most 200 chars.
+        let body = "误".repeat(300); // each char is 3 bytes in UTF-8
+        let result = handle_response_status(503, &body);
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 503);
+            let body_part = message.strip_prefix("Server error: ").unwrap();
+            assert_eq!(body_part.chars().count(), 200);
+        } else {
+            panic!("expected Api error");
+        }
+    }
+
+    // ── auth_headers invalid token path ──
+    // A malformed API key (e.g. containing control bytes) must produce a
+    // clean AppError::Unknown rather than panicking. Existing tests only
+    // cover valid/empty tokens; the error branch was untested.
+
+    #[test]
+    fn auth_headers_invalid_token_newline_rejected() {
+        // Newline (0x0A) is not a legal HeaderValue byte.
+        let result = auth_headers("token\nwith-newline");
+        assert!(matches!(result, Err(AppError::Unknown(_))));
+        if let Err(AppError::Unknown(msg)) = result {
+            assert!(msg.contains("Invalid token format"), "got: {msg}");
+        }
+    }
+
+    #[test]
+    fn auth_headers_invalid_token_null_byte_rejected() {
+        let result = auth_headers("token\u{0000}bad");
+        assert!(matches!(result, Err(AppError::Unknown(_))));
+    }
+
+    #[test]
+    fn auth_headers_invalid_token_carriage_return_rejected() {
+        let result = auth_headers("token\r\nX-Injected: yes");
+        assert!(matches!(result, Err(AppError::Unknown(_))));
+    }
 }

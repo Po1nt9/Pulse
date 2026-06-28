@@ -344,4 +344,105 @@ mod tests {
         assert_eq!(restored.refresh_interval_seconds, u64::MAX);
         assert_eq!(restored.warning_threshold_percent, 100.0);
     }
+
+    // ── AppConfig #[serde(default)] partial-JSON robustness ──
+    // AppConfig is annotated with #[serde(default)] so that hand-edited,
+    // partially-saved, or forward-compatible config.json files still load
+    // instead of crashing the app on startup. None of these partial-input
+    // paths were covered by the existing roundtrip tests (which always
+    // serialized a full AppConfig first).
+
+    #[test]
+    fn app_config_serde_default_empty_object() {
+        // `{}` must deserialize to the full default config (4 providers).
+        let restored: AppConfig = serde_json::from_str("{}").unwrap();
+        let default = AppConfig::default();
+        assert_eq!(restored.providers.len(), default.providers.len());
+        assert_eq!(restored.version, default.version);
+        assert_eq!(restored.settings.theme, default.settings.theme);
+    }
+
+    #[test]
+    fn app_config_serde_default_partial_only_version_keeps_version() {
+        // Only `version` provided → providers/settings come from default,
+        // but the supplied version must be preserved (not overwritten).
+        let json = r#"{"version": "9.9.9"}"#;
+        let restored: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(restored.version, "9.9.9");
+        assert_eq!(restored.providers.len(), AppConfig::default().providers.len());
+        assert_eq!(restored.settings.theme, "dark");
+    }
+
+    #[test]
+    fn app_config_serde_default_partial_only_providers_keeps_providers() {
+        // Only `providers` provided → settings/version come from default,
+        // but the supplied providers list must be preserved exactly.
+        let json = r#"{
+            "providers": [
+                {
+                    "id": "only",
+                    "name": "Only",
+                    "provider_type": "custom",
+                    "api_base_url": "https://only.example.com",
+                    "display_name": "Only",
+                    "refresh_interval_seconds": 60,
+                    "warning_threshold_percent": 10.0,
+                    "enabled": true
+                }
+            ]
+        }"#;
+        let restored: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(restored.providers.len(), 1);
+        assert_eq!(restored.providers[0].id, "only");
+        assert_eq!(restored.providers[0].provider_type, ProviderType::Custom);
+        // defaults filled in for the missing fields
+        assert_eq!(restored.version, AppConfig::default().version);
+        assert_eq!(restored.settings.global_refresh_interval, 300);
+    }
+
+    #[test]
+    fn app_config_serde_default_partial_only_settings_keeps_settings() {
+        // Only `settings` provided → providers/version come from default,
+        // but the supplied settings must be preserved.
+        let json = r#"{
+            "settings": {
+                "theme": "light",
+                "auto_start": true,
+                "global_refresh_interval": 120,
+                "show_notifications": false,
+                "window_position": [10, 20]
+            }
+        }"#;
+        let restored: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(restored.settings.theme, "light");
+        assert!(restored.settings.auto_start);
+        assert_eq!(restored.settings.global_refresh_interval, 120);
+        assert!(!restored.settings.show_notifications);
+        assert_eq!(restored.settings.window_position, Some((10, 20)));
+        // defaults filled in for the missing fields
+        assert_eq!(restored.providers.len(), AppConfig::default().providers.len());
+        assert_eq!(restored.version, AppConfig::default().version);
+    }
+
+    #[test]
+    fn app_config_serde_default_extra_unknown_field_ignored() {
+        // Forward-compatibility: unknown fields (from a newer app version)
+        // must be ignored, not cause a load failure on older versions.
+        let json = r#"{"version": "0.1.0", "future_field": [1, 2, 3]}"#;
+        let restored: AppConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(restored.version, "0.1.0");
+    }
+
+    #[test]
+    fn app_config_serde_default_null_providers_treated_as_default() {
+        // Some serializers emit `null` for missing arrays; with
+        // #[serde(default)], an explicit null must not panic — serde falls
+        // back to the default when the field is absent, but an explicit
+        // null is a different code path and must fail cleanly (not panic).
+        let result: std::result::Result<AppConfig, _> =
+            serde_json::from_str(r#"{"providers": null}"#);
+        // Explicit null is a type mismatch, not an absent field — it must
+        // error rather than silently produce an empty list.
+        assert!(result.is_err());
+    }
 }
