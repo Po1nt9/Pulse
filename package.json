@@ -10,7 +10,8 @@
     "lint": "cd apps/web && eslint src --report-unused-disable-directives --max-warnings 0",
     "typecheck": "cd apps/web && tsc --noEmit",
     "format": "cd apps/web && prettier --write src",
-    "test": "npm run lint",
+    "test": "cd apps/web && vitest run",
+    "test:watch": "cd apps/web && vitest",
     "tauri": "tauri --config apps/tauri/tauri.conf.json",
     "tauri:dev": "tauri dev --config apps/tauri/tauri.conf.json",
     "tauri:build": "tauri build --config apps/tauri/tauri.conf.json"
@@ -43,6 +44,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.4.2",
     "typescript-eslint": "^8.61.1",
-    "vite": "^5.1.6"
+    "vite": "^5.1.6",
+    "vitest": "^4.1.9"
   }
 }
