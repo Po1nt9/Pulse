@@ -169,4 +169,66 @@ mod tests {
         // Just verify it doesn't panic and returns a client
         let _ = client;
     }
+
+    #[test]
+    fn handle_response_status_client_error_long_body_truncated() {
+        // Provider error bodies (e.g. HTML error pages, long JSON traces) must
+        // be capped at 200 chars so arbitrarily large payloads never flood the
+        // UI or logs. "Client error: " is 14 chars.
+        let body = "X".repeat(250);
+        let result = handle_response_status(400, &body);
+        assert!(matches!(result, Err(AppError::Api { status: 400, .. })));
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 400);
+            assert_eq!(message, format!("Client error: {}", "X".repeat(200)));
+            assert_eq!(message.len(), 14 + 200);
+        }
+    }
+
+    #[test]
+    fn handle_response_status_server_error_long_body_truncated() {
+        // Separate 5xx branch must also truncate. "Server error: " is 14 chars.
+        let body = "Y".repeat(300);
+        let result = handle_response_status(500, &body);
+        assert!(matches!(result, Err(AppError::Api { status: 500, .. })));
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 500);
+            assert_eq!(message, format!("Server error: {}", "Y".repeat(200)));
+            assert_eq!(message.len(), 14 + 200);
+        }
+    }
+
+    #[test]
+    fn handle_response_status_success_boundary_299() {
+        // 299 is the upper bound of the 2xx success range.
+        let result = handle_response_status(299, "ok");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn handle_response_status_server_error_boundary_599() {
+        // 599 is the upper bound of the 5xx server-error range.
+        let result = handle_response_status(599, "gateway timeout");
+        assert!(matches!(result, Err(AppError::Api { status: 599, .. })));
+        if let Err(AppError::Api { status, message }) = result {
+            assert_eq!(status, 599);
+            assert_eq!(message, "Server error: gateway timeout");
+        }
+    }
+
+    #[test]
+    fn auth_headers_rejects_invalid_control_chars() {
+        // Control characters (e.g. newline) are forbidden in HTTP header
+        // values; the function must surface this as a typed error instead of
+        // panicking or silently building a header-injection-prone request.
+        let result = auth_headers("token\nwith newline");
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AppError::Unknown(_))));
+        if let Err(AppError::Unknown(msg)) = result {
+            assert!(
+                msg.starts_with("Invalid token format"),
+                "unexpected message: {msg}"
+            );
+        }
+    }
 }
