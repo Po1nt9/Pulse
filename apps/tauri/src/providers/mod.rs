@@ -81,3 +81,67 @@ pub fn create_usage_provider(
         crate::config::ProviderType::Custom => Box::new(custom::CustomProvider::with_url(api_base_url.to_string())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ProviderType;
+
+    /// Every `ProviderType` must resolve to a balance adapter with the expected name.
+    /// This guards the factory's match arms (including the Custom+url branch) against
+    /// silent regressions when variants are added or reordered.
+    #[test]
+    fn create_balance_provider_maps_every_variant() {
+        let cases = [
+            (ProviderType::DeepSeek, "DeepSeek"),
+            (ProviderType::OpenAi, "OpenAI"),
+            (ProviderType::Anthropic, "Anthropic"),
+            (ProviderType::OpenRouter, "OpenRouter"),
+            (ProviderType::Custom, "Custom"),
+        ];
+        for (pt, expected_name) in cases {
+            let provider = create_balance_provider(&pt, "https://custom.example.com");
+            assert_eq!(
+                provider.provider_name(),
+                expected_name,
+                "wrong balance provider for {:?}",
+                pt
+            );
+        }
+    }
+
+    #[test]
+    fn create_usage_provider_maps_every_variant() {
+        let cases = [
+            (ProviderType::DeepSeek, "DeepSeek"),
+            (ProviderType::OpenAi, "OpenAI"),
+            (ProviderType::Anthropic, "Anthropic"),
+            (ProviderType::OpenRouter, "OpenRouter"),
+            (ProviderType::Custom, "Custom"),
+        ];
+        for (pt, expected_name) in cases {
+            let provider = create_usage_provider(&pt, "https://custom.example.com");
+            assert_eq!(
+                provider.provider_name(),
+                expected_name,
+                "wrong usage provider for {:?}",
+                pt
+            );
+        }
+    }
+
+    /// The Custom arm must accept the supplied base URL without panicking — a regression
+    /// here (e.g. someone dropping the `api_base_url` argument) would break every custom
+    /// provider at runtime.
+    #[test]
+    fn create_balance_provider_custom_accepts_base_url() {
+        let provider = create_balance_provider(&ProviderType::Custom, "https://api.my-llm.io/v1/");
+        assert_eq!(provider.provider_name(), "Custom");
+    }
+
+    #[test]
+    fn create_usage_provider_custom_accepts_base_url() {
+        let provider = create_usage_provider(&ProviderType::Custom, "https://api.my-llm.io/v1/");
+        assert_eq!(provider.provider_name(), "Custom");
+    }
+}

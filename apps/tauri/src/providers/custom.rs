@@ -37,6 +37,25 @@ struct CustomBalanceResponse {
     remaining: f64,
 }
 
+/// Derive `BalanceInfo` from a custom endpoint's fields, tolerating partial data:
+///   total      = total_balance when > 0, otherwise fall back to `balance`
+///   remaining  = remaining when > 0, otherwise fall back to `total - used`
+///   percentage = used / total * 100  (0 when total is 0 to avoid div-by-zero)
+/// No clamping of over-usage.
+fn compute_balance(balance: f64, total_balance: f64, used: f64, remaining: f64) -> BalanceInfo {
+    let total = if total_balance > 0.0 { total_balance } else { balance };
+    let used = used;
+    let remaining = if remaining > 0.0 { remaining } else { total - used };
+    let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
+    BalanceInfo {
+        total,
+        used,
+        remaining,
+        currency: "USD".to_string(),
+        percentage_used: percentage,
+    }
+}
+
 #[async_trait]
 impl BalanceProvider for CustomProvider {
     async fn get_balance(
@@ -60,18 +79,12 @@ impl BalanceProvider for CustomProvider {
         let data: CustomBalanceResponse = serde_json::from_str(&body)
             .map_err(|e| crate::error::AppError::Unknown(format!("Parse error: {}", e)))?;
 
-        let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
-        let used = data.used;
-        let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-
-        Ok(BalanceInfo {
-            total,
-            used,
-            remaining,
-            currency: "USD".to_string(),
-            percentage_used: percentage,
-        })
+        Ok(compute_balance(
+            data.balance,
+            data.total_balance,
+            data.used,
+            data.remaining,
+        ))
     }
 
     fn provider_name(&self) -> &str {
@@ -108,34 +121,49 @@ mod tests {
 
     #[test]
     fn balance_response_parsing_with_total_balance() {
-        let json = r#"{"balance": 0.0, "total_balance": 100.0, "used": 30.0, "remaining": 70.0}"#;
-        let data: CustomBalanceResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(data.total_balance, 100.0);
-        assert_eq!(data.used, 30.0);
-        assert_eq!(data.remaining, 70.0);
-        
-        let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
-        let used = data.used;
-        let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
-        let percentage = if total > 0.0 { (used / total) * 100.0 } else { 0.0 };
-        
-        assert_eq!(total, 100.0);
-        assert_eq!(used, 30.0);
-        assert_eq!(remaining, 70.0);
-        assert_eq!(percentage, 30.0);
+        // total_balance > 0 → use it; remaining > 0 → use it.
+        let info = compute_balance(0.0, 100.0, 30.0, 70.0);
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.used, 30.0);
+        assert_eq!(info.remaining, 70.0);
+        assert_eq!(info.percentage_used, 30.0);
+        assert_eq!(info.currency, "USD");
     }
 
     #[test]
     fn balance_response_parsing_fallback_to_balance() {
-        let json = r#"{"balance": 50.0, "total_balance": 0.0, "used": 20.0, "remaining": 0.0}"#;
-        let data: CustomBalanceResponse = serde_json::from_str(json).unwrap();
-        
-        let total = if data.total_balance > 0.0 { data.total_balance } else { data.balance };
-        let used = data.used;
-        let remaining = if data.remaining > 0.0 { data.remaining } else { total - used };
-        
-        assert_eq!(total, 50.0);
-        assert_eq!(remaining, 30.0);
+        // total_balance == 0 → fall back to `balance`; remaining == 0 → fall back to total-used.
+        let info = compute_balance(50.0, 0.0, 20.0, 0.0);
+        assert_eq!(info.total, 50.0);
+        assert_eq!(info.remaining, 30.0); // 50 - 20
+        assert_eq!(info.percentage_used, 40.0); // 20 / 50 * 100
+    }
+
+    #[test]
+    fn compute_balance_remaining_preferred_over_derived() {
+        // Both remaining and total_balance present → use the explicit values.
+        let info = compute_balance(999.0, 100.0, 10.0, 90.0);
+        assert_eq!(info.remaining, 90.0);
+        assert_eq!(info.percentage_used, 10.0);
+    }
+
+    #[test]
+    fn compute_balance_all_zero_avoids_div_by_zero() {
+        // No fields at all (empty endpoint body) → zeros, no panic.
+        let info = compute_balance(0.0, 0.0, 0.0, 0.0);
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.used, 0.0);
+        assert_eq!(info.remaining, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
+    }
+
+    #[test]
+    fn compute_balance_over_usage_not_clamped() {
+        // used > total → percentage > 100, no clamping.
+        let info = compute_balance(0.0, 100.0, 150.0, 0.0);
+        assert_eq!(info.used, 150.0);
+        assert_eq!(info.remaining, -50.0); // total - used
+        assert_eq!(info.percentage_used, 150.0);
     }
 
     #[test]

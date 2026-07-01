@@ -28,6 +28,32 @@ struct BalanceInfoItem {
     topped_up_balance: String,
 }
 
+/// Derive the user-facing `BalanceInfo` from DeepSeek's raw balance fields.
+///
+/// DeepSeek reports `total_balance` as the *remaining* balance, so:
+///   total      = granted + topped_up
+///   used       = total - remaining
+///   percentage = used / total * 100  (0 when total is 0 to avoid div-by-zero)
+///
+/// Values are reported as-is (no clamping), so over-usage surfaces as a
+/// `used` greater than `total` and a percentage above 100.
+fn compute_balance(granted: f64, topped_up: f64, remaining: f64, currency: String) -> BalanceInfo {
+    let total = granted + topped_up;
+    let used = total - remaining;
+    let percentage = if total > 0.0 {
+        (used / total) * 100.0
+    } else {
+        0.0
+    };
+    BalanceInfo {
+        total,
+        used,
+        remaining,
+        currency,
+        percentage_used: percentage,
+    }
+}
+
 #[async_trait]
 impl BalanceProvider for DeepSeekProvider {
     async fn get_balance(
@@ -53,29 +79,15 @@ impl BalanceProvider for DeepSeekProvider {
         let info = data.balance_infos.first()
             .ok_or_else(|| crate::error::AppError::Unknown("No balance info".to_string()))?;
 
-        let total: f64 = info.total_balance.parse()
+        // DeepSeek's `total_balance` is the *remaining* balance, not the grant total.
+        let remaining: f64 = info.total_balance.parse()
             .map_err(|_| crate::error::AppError::Unknown("Invalid total_balance format".to_string()))?;
         let granted: f64 = info.granted_balance.parse()
             .map_err(|_| crate::error::AppError::Unknown("Invalid granted_balance format".to_string()))?;
         let topped_up: f64 = info.topped_up_balance.parse()
             .map_err(|_| crate::error::AppError::Unknown("Invalid topped_up_balance format".to_string()))?;
-        
-        // DeepSeek: total_balance is remaining balance
-        // used = granted + topped_up - total_balance (remaining)
-        let used = granted + topped_up - total;
-        let percentage = if (granted + topped_up) > 0.0 {
-            (used / (granted + topped_up)) * 100.0
-        } else {
-            0.0
-        };
 
-        Ok(BalanceInfo {
-            total: granted + topped_up,
-            used,
-            remaining: total,
-            currency: info.currency.clone(),
-            percentage_used: percentage,
-        })
+        Ok(compute_balance(granted, topped_up, remaining, info.currency.clone()))
     }
 
     fn provider_name(&self) -> &str {
@@ -161,47 +173,52 @@ mod tests {
     }
 
     #[test]
-    fn balance_info_calculation() {
-        // granted=200, topped_up=50, total=100 (remaining)
-        // used = 200 + 50 - 100 = 150
-        // percentage = 150 / 250 * 100 = 60%
-        let total: f64 = "100.0".parse().unwrap();
-        let granted: f64 = "200.0".parse().unwrap();
-        let topped_up: f64 = "50.0".parse().unwrap();
-        let used = granted + topped_up - total;
-        let percentage = used / (granted + topped_up) * 100.0;
-        
-        assert_eq!(used, 150.0);
-        assert_eq!(percentage, 60.0);
+    fn compute_balance_normal_usage() {
+        // granted=200, topped_up=50, remaining=100 → total=250, used=150, 60%
+        let info = compute_balance(200.0, 50.0, 100.0, "CNY".to_string());
+        assert_eq!(info.total, 250.0);
+        assert_eq!(info.used, 150.0);
+        assert_eq!(info.remaining, 100.0);
+        assert_eq!(info.percentage_used, 60.0);
+        assert_eq!(info.currency, "CNY");
     }
 
     #[test]
-    fn balance_info_calculation_zero_granted() {
-        let total: f64 = "0.0".parse().unwrap();
-        let granted: f64 = "0.0".parse().unwrap();
-        let topped_up: f64 = "0.0".parse().unwrap();
-        let used = granted + topped_up - total;
-        let percentage = if (granted + topped_up) > 0.0 {
-            (used / (granted + topped_up)) * 100.0
-        } else {
-            0.0
-        };
-        
-        assert_eq!(used, 0.0);
-        assert_eq!(percentage, 0.0);
+    fn compute_balance_zero_grant_avoids_div_by_zero() {
+        // No grant at all — must not divide by zero; percentage clamps to 0.
+        let info = compute_balance(0.0, 0.0, 0.0, "CNY".to_string());
+        assert_eq!(info.total, 0.0);
+        assert_eq!(info.used, 0.0);
+        assert_eq!(info.remaining, 0.0);
+        assert_eq!(info.percentage_used, 0.0);
     }
 
     #[test]
-    fn balance_info_calculation_full_usage() {
-        // granted=100, topped_up=0, total=0 (remaining)
-        // used = 100, percentage = 100%
-        let total: f64 = "0.0".parse().unwrap();
-        let granted: f64 = "100.0".parse().unwrap();
-        let topped_up: f64 = "0.0".parse().unwrap();
-        let used = granted + topped_up - total;
-        let percentage = (used / (granted + topped_up)) * 100.0;
-        
-        assert_eq!(used, 100.0);
-        assert_eq!(percentage, 100.0);
+    fn compute_balance_full_usage() {
+        // granted=100, topped_up=0, remaining=0 → fully consumed, 100%
+        let info = compute_balance(100.0, 0.0, 0.0, "CNY".to_string());
+        assert_eq!(info.total, 100.0);
+        assert_eq!(info.used, 100.0);
+        assert_eq!(info.remaining, 0.0);
+        assert_eq!(info.percentage_used, 100.0);
+    }
+
+    #[test]
+    fn compute_balance_over_usage_is_not_clamped() {
+        // remaining went negative (e.g. refund reversal or API reporting lag):
+        // used exceeds total and percentage exceeds 100 — contract is "no clamping".
+        // (values chosen so the percentage is exactly representable in f64)
+        let info = compute_balance(100.0, 0.0, -50.0, "CNY".to_string());
+        assert_eq!(info.used, 150.0);
+        assert_eq!(info.percentage_used, 150.0);
+        assert_eq!(info.remaining, -50.0);
+    }
+
+    #[test]
+    fn compute_balance_remaining_exceeds_grant() {
+        // remaining > granted+topped (credit added beyond grant) → negative used.
+        let info = compute_balance(100.0, 0.0, 150.0, "CNY".to_string());
+        assert_eq!(info.used, -50.0);
+        assert_eq!(info.percentage_used, -50.0);
     }
 }
